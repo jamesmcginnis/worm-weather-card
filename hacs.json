@@ -1,0 +1,7 @@
+{
+  "name": "Worm Weather Card",
+  "description": "Apple-inspired weather radar and atmospheric conditions card for Home Assistant.",
+  "render_readme": false,
+  "filename": "worm-weather-card.js",
+  "content_in_root": true
+}
