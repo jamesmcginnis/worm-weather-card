@@ -2164,11 +2164,6 @@ class WormWeatherCardEditor extends HTMLElement {
   <!-- CARD SETTINGS -->
   <div><div class="sec-title">Card Settings</div><div class="card-block">
     <div class="row">
-      <div class="row-icon" style="background:rgba(0,122,255,0.12)">${ico('mdi:monitor-dashboard',16,'color:#007AFF')}</div>
-      <div class="row-info"><div class="row-label">Default View</div></div>
-      <div class="row-ctrl" id="seg-default_view"></div>
-    </div>
-    <div class="row">
       <div class="row-icon" style="background:rgba(52,199,89,0.12)">${ico('mdi:arrow-expand-vertical',16,'color:#34C759')}</div>
       <div class="row-info"><div class="row-label">Compact Height</div><div class="row-sub">Pixels in compact mode</div></div>
       <div class="row-ctrl"><input type="range" class="sl" id="sl-ch" min="120" max="260" step="10" value="${c.compact_height||160}"><span class="sl-val" id="slv-ch">${c.compact_height||160}px</span></div>
@@ -2267,8 +2262,6 @@ class WormWeatherCardEditor extends HTMLElement {
 </div>`;
 
     // Build segmented controls after DOM is set
-    const segDV = this.shadowRoot.getElementById('seg-default_view');
-    if (segDV) segDV.innerHTML = this._seg('default_view', [['compact','Compact'],['radar','Radar'],['weather','Full']], c.default_view||'compact');
     const segTU = this.shadowRoot.getElementById('seg-temp_unit');
     if (segTU) segTU.innerHTML = this._seg('temp_unit', [['°C','°C'],['°F','°F']], c.temp_unit||'°C');
 
@@ -2291,7 +2284,6 @@ class WormWeatherCardEditor extends HTMLElement {
     const tdt=s.getElementById('tog-details');if(tdt)tdt.checked=c.show_details!==false;
     const twc=s.getElementById('tog-windcmp');if(twc)twc.checked=c.show_wind_on_compact===true;
     // Update seg opts
-    s.querySelectorAll('[data-seg="default_view"]').forEach(el=>el.classList.toggle('on',el.dataset.val===(c.default_view||'compact')));
     s.querySelectorAll('[data-seg="temp_unit"]').forEach(el=>el.classList.toggle('on',el.dataset.val===(c.temp_unit||'°C')));
     // Update postcode display
     const pc=s.getElementById('inp-postcode');if(pc)pc.value=c.postcode||'';
