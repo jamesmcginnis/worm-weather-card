@@ -1211,7 +1211,7 @@ ha-card {
   pointer-events:none;transition:opacity .4s;
 }
 .map-legend{
-  position:absolute;bottom:12px;right:12px;z-index:1000;
+  position:absolute;bottom:28px;right:12px;z-index:1000;
   background:rgba(12,12,18,0.92);backdrop-filter:blur(14px);
   border-radius:9px;padding:7px 9px;border:1px solid rgba(255,255,255,0.08);
 }
@@ -1824,28 +1824,26 @@ class WormWeatherCard extends HTMLElement {
     const f = this._frames[i]; if (!f) return;
     const url = 'https://tilecache.rainviewer.com' + f.path + '/256/{z}/{x}/{y}/7/1_1.png';
     const targetOpacity = parseFloat(this._cfg.radar_opacity) || 0.7;
+    const oldLayer = this._radar;
+    const hasOld = !!oldLayer;
 
-    // Create the new layer at opacity 0
+    // New layer: start visible immediately if no old layer to crossfade from
     const newLayer = L.tileLayer(url, {
-      opacity: instant ? targetOpacity : 0,
+      opacity: (instant || !hasOld) ? targetOpacity : 0,
       zIndex: 200,
       crossOrigin: 'anonymous',
     }).addTo(this._map);
 
-    const oldLayer = this._radar;
     this._radar = newLayer;
 
-    if (instant || !oldLayer) {
-      if (oldLayer) this._map.removeLayer(oldLayer);
-    } else {
+    if (hasOld && !instant) {
       // Crossfade: ramp new layer up, old layer down over ~300 ms
-      const STEPS = 12, INTERVAL = 25; // 300ms total
+      const STEPS = 12, INTERVAL = 25;
       let step = 0;
       const fade = setInterval(() => {
         step++;
         const t = step / STEPS;
-        // ease-in-out: t*(2-t) for smooth feel
-        const eased = t * (2 - t);
+        const eased = t * (2 - t); // ease-in-out
         try { newLayer.setOpacity(eased * targetOpacity); } catch (_) {}
         try { oldLayer.setOpacity((1 - eased) * targetOpacity); } catch (_) {}
         if (step >= STEPS) {
@@ -1853,6 +1851,8 @@ class WormWeatherCard extends HTMLElement {
           try { if (this._map) this._map.removeLayer(oldLayer); } catch (_) {}
         }
       }, INTERVAL);
+    } else if (hasOld) {
+      this._map.removeLayer(oldLayer);
     }
 
     // Update time label and progress bar
