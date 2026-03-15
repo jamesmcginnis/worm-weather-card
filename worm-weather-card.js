@@ -1645,7 +1645,13 @@ class WormWeatherCard extends HTMLElement {
     $('v-expanded').classList.toggle('active', this._expanded);
     if (this._expanded) {
       this._stopAtm();
-      if (!this._map) this._initMapAsync(); else setTimeout(() => this._map.invalidateSize(), 80);
+      if (!this._map) {
+        this._initMapAsync();
+      } else {
+        setTimeout(() => this._map.invalidateSize(), 80);
+        // Map already exists — restart animation if frames are loaded
+        if (this._frames.length && !this._playing) this._startAnim();
+      }
       this._loadForecast().then(() => this._updateExpandedContent());
       this._updateExpandedContent();
     } else {
@@ -1661,7 +1667,17 @@ class WormWeatherCard extends HTMLElement {
       s.getElementById('v-'+n)?.classList.toggle('active', n===t);
       s.getElementById('t-'+n)?.classList.toggle('on', n===t);
     });
-    if (t==='radar') { if (!this._map) this._initMapAsync(); else setTimeout(() => this._map.invalidateSize(), 80); }
+    if (t==='radar') {
+      if (!this._map) {
+        this._initMapAsync();
+      } else {
+        setTimeout(() => this._map.invalidateSize(), 80);
+        // Restart animation if it was stopped when leaving radar tab
+        if (this._frames.length && !this._playing && this._cfg.auto_animate !== false) {
+          this._startAnim();
+        }
+      }
+    }
     if (t==='weather') { const wxc = s.getElementById('wx-content'); if (wxc) wxc.innerHTML = this._wxHTML(); }
     if (t==='forecast') {
       const fcc = s.getElementById('fc-content');
