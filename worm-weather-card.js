@@ -1871,7 +1871,7 @@ class WormWeatherCardEditor extends HTMLElement {
 <div class="container">
   <div class="ed-hdr">
     <ha-icon class="ed-logo" icon="mdi:weather-cloudy" style="color:var(--primary-color,#3b82f6)"></ha-icon>
-    <div><div class="ed-title">Worm Weather Card</div><div class="ed-ver">by James McGinnis</div></div>
+    <div><div class="ed-title">Worm Weather Card</div></div>
   </div>
 
   <!-- CARD SETTINGS -->
