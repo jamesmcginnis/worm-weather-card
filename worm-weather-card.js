@@ -1889,22 +1889,15 @@ class WormWeatherCard extends HTMLElement {
     if (this._frames.length < 2) return;
     this._playing = true;
     const speed = parseInt(this._cfg.animation_speed) || 600;
-    let lastTick = 0;
-    const tick = (ts) => {
-      if (!this._playing) return;
-      if (ts - lastTick >= speed) {
-        lastTick = ts;
-        this._fi = (this._fi + 1) % this._frames.length;
-        this._showFrame(this._fi);
-      }
-      this._rafAnim = requestAnimationFrame(tick);
-    };
-    this._rafAnim = requestAnimationFrame(tick);
+    this._timer = setInterval(() => {
+      this._fi = (this._fi + 1) % this._frames.length;
+      this._showFrame(this._fi);
+    }, speed);
   }
 
   _stopAnim() {
+    if (this._timer) { clearInterval(this._timer); this._timer = null; }
     if (this._rafAnim) { cancelAnimationFrame(this._rafAnim); this._rafAnim = null; }
-    if (this._timer)   { clearInterval(this._timer); this._timer = null; }
     this._playing = false;
   }
   _toggleAnim(){ this._playing ? this._stopAnim() : this._startAnim(); }
