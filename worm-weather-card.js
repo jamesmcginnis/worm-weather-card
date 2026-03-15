@@ -1438,6 +1438,7 @@ class WormWeatherCard extends HTMLElement {
 
   setConfig(c) {
     if (!c) throw new Error('worm-weather-card: missing config');
+    const prev = this._cfg;
     this._cfg = Object.assign({
       accent_color:'#5AC8FA', default_view:'compact', map_style:'standard',
       zoom_level:7, radar_opacity:0.7, animation_speed:600,
@@ -1448,7 +1449,16 @@ class WormWeatherCard extends HTMLElement {
     this._zoom = parseInt(this._cfg.zoom_level) || 7;
     this._expanded = (this._cfg.default_view || 'compact') !== 'compact';
     this._curTab = this._expanded ? 'radar' : 'compact';
-    if (this._ready) { this._stopAtm(); if (this._map) { this._map.remove(); this._map = null; } this._render(); this._postRender(); }
+    if (this._ready) {
+      this._stopAtm();
+      this._stopAnim();
+      // _render() always rebuilds the shadow DOM so the old map container is gone.
+      // Detach Leaflet cleanly but preserve the frame buffer so we don't re-fetch.
+      if (this._map) { this._map.remove(); this._map = null; }
+      // Keep this._frames, this._fi, this._forecastHourly, this._forecastDaily intact
+      this._render();
+      this._postRender();
+    }
   }
 
   set hass(h) {
@@ -1527,8 +1537,14 @@ class WormWeatherCard extends HTMLElement {
       this._initAtm();
     } else {
       const dv = this._cfg.default_view || 'radar';
-      // Only init the map if radar is the active tab
-      if (dv !== 'weather' && dv !== 'forecast') this._initMapAsync();
+      if (dv !== 'weather' && dv !== 'forecast') {
+        if (!this._map) {
+          this._initMapAsync();
+        } else {
+          setTimeout(() => this._map.invalidateSize(), 80);
+          if (this._frames.length && !this._playing) this._startAnim();
+        }
+      }
       this._loadForecast().then(() => this._updateExpandedContent());
       this._updateExpandedContent();
     }
@@ -1814,7 +1830,17 @@ class WormWeatherCard extends HTMLElement {
       crossOrigin: true
     }).addTo(this._map);
     setTimeout(() => { if (this._map) this._map.invalidateSize(); }, 150);
-    this._fetchRadar();
+
+    // Reuse cached frames if available — avoids a network round-trip on every editor change.
+    // Only fetch fresh data on the very first load or after a long gap.
+    if (this._frames.length) {
+      this._radar = null; // old layer reference is stale after map rebuild
+      this._showFrame(this._fi, true); // repaint current frame immediately
+      if (this._cfg.auto_animate !== false) this._startAnim();
+    } else {
+      this._fetchRadar();
+    }
+
     if (this._cfg.postcode) this._geocode();
   }
 
