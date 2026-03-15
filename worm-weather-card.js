@@ -159,8 +159,9 @@ class AtmCanvas {
     this._birds        = []; this._windVapor  = [];
     this._shootStars   = []; this._comets     = [];
     this._planes       = []; this._dustMotes  = [];
+    this._ufos         = [];
     this._aurora       = null;
-    this._birdTimer = 0; this._planeTimer = 0;
+    this._birdTimer = 0; this._planeTimer = 0; this._ufoTimer = 0;
     // State
     this._cond = 'sunny'; this._isNight = false; this._isDark = true;
     this._w = 0; this._h = 0;
@@ -224,7 +225,7 @@ class AtmCanvas {
     this._snow=[]; this._bolts=[]; this._fog=[];
     this._birds=[]; this._windVapor=[];
     this._shootStars=[]; this._comets=[]; this._planes=[];
-    this._dustMotes=[]; this._aurora=null;
+    this._dustMotes=[]; this._ufos=[]; this._aurora=null;
     this._flashOp=0;
 
     this._buildStars(c, w, h);
@@ -270,28 +271,56 @@ class AtmCanvas {
 
   /* ── Clouds ──────────────────────────────────────────────────── */
   _buildClouds(c, w, h) {
-    const nc = ({'clear-night':0,'sunny':0,'exceptional':0,'partlycloudy':3,'cloudy':8,
-      'fog':6,'hail':7,'lightning':9,'lightning-rainy':8,'pouring':9,'rainy':7,
-      'snowy':7,'snowy-rainy':6,'windy':5,'windy-variant':5})[c] ?? 4;
+    const nc = ({'clear-night':0,'sunny':0,'exceptional':0,'partlycloudy':4,'cloudy':9,
+      'fog':7,'hail':8,'lightning':10,'lightning-rainy':9,'pouring':10,'rainy':8,
+      'snowy':8,'snowy-rainy':7,'windy':6,'windy-variant':6})[c] ?? 5;
     const storm = c==='lightning'||c==='lightning-rainy'||c==='pouring'||c==='hail';
+    const rainy  = c==='rainy'||c==='snowy'||c==='snowy-rainy';
+
     for (let i=0; i<nc; i++) {
-      const rand = this._sRand(Math.random()*9999);
-      const x = Math.random()*(w*1.5)-w*.25;
-      const y = h*(0.03+Math.random()*(storm?.44:.50));
-      const baseR = h*(0.14+rand()*.20);
-      const vSq = storm?.42:.36;
-      const pc = 7+Math.floor(rand()*5);
+      const rand = this._sRand(Math.random()*9999 + i*1337);
+      // Depth layers: foreground clouds are bigger and lower
+      const layer = 1 + (i % 3);             // 1=bg, 2=mid, 3=fg
+      const depthScale = 0.55 + layer * 0.22; // bg smaller, fg larger
+      const x = Math.random()*(w*1.6) - w*.3;
+      const yRange = storm ? 0.42 : rainy ? 0.48 : 0.54;
+      const y = h*(0.02 + rand()*(storm?0.38:yRange));
+      const baseR = h*(0.10 + rand()*0.22) * depthScale;
+      const vSq  = storm ? 0.38 : 0.42;    // vertical squash
+
+      // Build organic cloud from many overlapping puffs
+      // More puffs = rounder, more detailed shape
+      const pc = 10 + Math.floor(rand()*7);  // 10-16 puffs per cloud
       const puffs = [];
-      for (let p=0;p<pc;p++) {
-        const ang=(p/pc)*Math.PI*2+rand()*.55, dist=rand()*.52+.18;
-        const dx=Math.cos(ang)*baseR*.52*dist, dy=Math.sin(ang)*baseR*.52*dist*vSq;
-        const r=baseR*(.20+rand()*.22), normY=(dy+baseR*vSq)/(baseR*vSq*2);
-        puffs.push({dx,dy,r,shade:Math.min(1,.42+(1-normY)*.44)});
+
+      // Main body ring of puffs
+      for (let p=0; p<pc; p++) {
+        const ang = (p/pc)*Math.PI*2 + rand()*.6;
+        const dist = rand()*.55 + .22;
+        const dx = Math.cos(ang)*baseR*.58*dist;
+        const dy = Math.sin(ang)*baseR*.58*dist*vSq;
+        const r  = baseR*(.18 + rand()*.26);
+        const normY = (dy + baseR*vSq) / (baseR*vSq*2);
+        puffs.push({dx, dy, r, shade: Math.min(1, 0.38+(1-normY)*0.50), isRim:false});
       }
-      puffs.push({dx:0,dy:-baseR*vSq*.18,r:baseR*.36,shade:.92});
-      puffs.sort((a,b)=>a.shade-b.shade);
-      this._clouds.push({x,y,puffs,speed:.07+rand()*.13,op:.68+rand()*.28,
-        breathPh:rand()*Math.PI*2,breathSpd:.0025+rand()*.0025,layer:1+(i%3),flashInt:0});
+      // Crown puffs — extra large, bright top
+      puffs.push({dx:0,         dy:-baseR*vSq*.25, r:baseR*.42, shade:.96, isRim:false});
+      puffs.push({dx:-baseR*.18,dy:-baseR*vSq*.18, r:baseR*.30, shade:.90, isRim:false});
+      puffs.push({dx: baseR*.18,dy:-baseR*vSq*.18, r:baseR*.30, shade:.90, isRim:false});
+      // Side puffs for width
+      puffs.push({dx:-baseR*.52,dy: baseR*vSq*.08, r:baseR*.28, shade:.72, isRim:false});
+      puffs.push({dx: baseR*.52,dy: baseR*vSq*.08, r:baseR*.28, shade:.72, isRim:false});
+      // Rim highlight — very subtle bright edge on top
+      puffs.push({dx:0,         dy:-baseR*vSq*.35, r:baseR*.18, shade:1.0, isRim:true});
+
+      puffs.sort((a,b)=>a.shade-b.shade);  // draw dark first, bright on top
+
+      // Wind speed: fg clouds move faster than bg
+      const spd = (0.04 + rand()*0.10) * depthScale;
+
+      this._clouds.push({x, y, puffs, speed:spd, op:0.72+rand()*0.24,
+        breathPh:rand()*Math.PI*2, breathSpd:0.002+rand()*0.003,
+        layer, flashInt:0, depthScale});
     }
   }
 
@@ -303,7 +332,7 @@ class AtmCanvas {
     for (let i=0;i<(p.rain||0);i++) {
       const z=.42+Math.random()*.58;
       this._rain.push({x:Math.random()*w,y:Math.random()*h,vy:(5.5+Math.random()*5.5)*z,
-        vx:(-.55-Math.random()*.75)*z,len:(9+Math.random()*14)*z,op:.14+Math.random()*.26,z});
+        vx:(-.55-Math.random()*.75)*z,len:(9+Math.random()*14)*z,op:.22+Math.random()*.38,z});
     }
     for (let i=0;i<(p.snow||0);i++) {
       const z=.42+Math.random()*.58, sr=Math.random();
@@ -433,6 +462,7 @@ class AtmCanvas {
     if (this._fog.length)     this._dFog(ctx,w,h);
     if (!this._isNight)       this._dBirds(ctx,w,h);
     this._dPlanes(ctx,w,h);
+    this._dUFO(ctx,w,h);
     if (this._dustMotes.length&&!this._isNight) this._dDustMotes(ctx,w,h);
     if (!this._isNight&&(c==='sunny'||c==='exceptional')) this._dHeatShimmer(ctx,w,h);
     // Foreground precipitation
@@ -672,27 +702,77 @@ class AtmCanvas {
 
   /* ── Clouds ──────────────────────────────────────────────────── */
   _dClouds(ctx, w, h) {
-    const pal=this._pal(), wind=.10+Math.sin(this._gustPh)*.08, PI2=Math.PI*2;
-    for (const cl of this._clouds) {
-      cl.x+=cl.speed*wind*(1+cl.layer*.14); if(cl.x>w+180)cl.x=-180;
-      cl.breathPh+=cl.breathSpd; const bS=1+Math.sin(cl.breathPh)*.012;
-      const fl=cl.flashInt||0; if(fl>0)cl.flashInt*=.72;
-      ctx.save(); ctx.translate(cl.x,cl.y);
+    const pal  = this._pal();
+    const wind = .06 + Math.sin(this._gustPh)*.06;
+    const PI2  = Math.PI*2;
+
+    // Sort by layer so bg renders first (painter's algorithm)
+    const sorted = [...this._clouds].sort((a,b) => a.layer - b.layer);
+
+    for (const cl of sorted) {
+      // Parallax: bg clouds drift slower
+      cl.x += cl.speed * wind * (1 + cl.layer * .20);
+      if (cl.x > w + 200) cl.x = -200;
+      cl.breathPh += cl.breathSpd;
+      const bS = 1 + Math.sin(cl.breathPh) * .018;
+      const fl = cl.flashInt || 0; if (fl > 0) cl.flashInt *= .70;
+
+      ctx.save(); ctx.translate(cl.x, cl.y);
+
       for (const pf of cl.puffs) {
-        const dx=pf.dx*bS, dy=pf.dy, r=pf.r*bS, sh=pf.shade, is=1-sh;
-        let tR=(pal.lit[0]*sh+pal.shd[0]*is)|0, tG=(pal.lit[1]*sh+pal.shd[1]*is)|0, tB=(pal.lit[2]*sh+pal.shd[2]*is)|0;
-        const mR=((pal.lit[0]+pal.shd[0])/2)|0, mG=((pal.lit[1]+pal.shd[1])/2)|0, mB=((pal.lit[2]+pal.shd[2])/2)|0;
-        if(fl>.01){tR=(tR+(255-tR)*fl*.7)|0;tG=(tG+(255-tG)*fl*.7)|0;tB=(tB+(255-tB)*fl*.7)|0;}
-        const op=Math.min(1,cl.op*pal.amb*sh); if(op<.04)continue;
-        const g=ctx.createRadialGradient(dx-r*.14,dy-r*.38,0,dx,dy,r);
-        g.addColorStop(0,`rgba(${tR},${tG},${tB},${op})`);
-        g.addColorStop(.40,`rgba(${mR},${mG},${mB},${op*.70})`);
-        g.addColorStop(.72,`rgba(${pal.shd[0]},${pal.shd[1]},${pal.shd[2]},${op*.12})`);
-        g.addColorStop(1,`rgba(${pal.shd[0]},${pal.shd[1]},${pal.shd[2]},0)`);
-        ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(dx,dy,r,r*.70,0,0,PI2); ctx.fill();
+        const dx = pf.dx * bS, dy = pf.dy, r = pf.r * bS;
+        const sh = pf.shade, is = 1 - sh;
+
+        // Base colour from palette interpolation
+        let tR = (pal.lit[0]*sh + pal.shd[0]*is) | 0;
+        let tG = (pal.lit[1]*sh + pal.shd[1]*is) | 0;
+        let tB = (pal.lit[2]*sh + pal.shd[2]*is) | 0;
+        const mR = ((pal.lit[0]+pal.shd[0])/2)|0;
+        const mG = ((pal.lit[1]+pal.shd[1])/2)|0;
+        const mB = ((pal.lit[2]+pal.shd[2])/2)|0;
+
+        // Lightning flash tint
+        if (fl > .01) {
+          tR = (tR + (255-tR)*fl*.65) | 0;
+          tG = (tG + (255-tG)*fl*.65) | 0;
+          tB = (tB + (255-tB)*fl*.85) | 0;
+        }
+
+        // Layer opacity: bg clouds slightly more transparent
+        const layerAlpha = 0.82 + cl.layer * 0.06;
+        const op = Math.min(1, cl.op * pal.amb * sh * layerAlpha);
+        if (op < .03) continue;
+
+        if (pf.isRim) {
+          // Rim highlight: thin bright crescent on top using screen blend
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          ctx.globalAlpha = op * .55;
+          const rg = ctx.createRadialGradient(dx-r*.12, dy-r*.42, 0, dx, dy, r);
+          rg.addColorStop(0, `rgba(255,255,255,.85)`);
+          rg.addColorStop(.45, `rgba(255,255,255,.20)`);
+          rg.addColorStop(1,  `rgba(255,255,255,0)`);
+          ctx.fillStyle = rg;
+          ctx.beginPath(); ctx.ellipse(dx, dy, r, r*.55, 0, 0, PI2); ctx.fill();
+          ctx.restore();
+        } else {
+          // Main puff — 4-stop radial gradient for volume
+          const g = ctx.createRadialGradient(dx-r*.16, dy-r*.42, 0, dx, dy, r*1.05);
+          g.addColorStop(0,   `rgba(${tR},${tG},${tB},${Math.min(1,op*1.1)})`);
+          g.addColorStop(.28, `rgba(${tR},${tG},${tB},${op})`);
+          g.addColorStop(.58, `rgba(${mR},${mG},${mB},${op*.55})`);
+          g.addColorStop(.82, `rgba(${pal.shd[0]},${pal.shd[1]},${pal.shd[2]},${op*.10})`);
+          g.addColorStop(1,   `rgba(${pal.shd[0]},${pal.shd[1]},${pal.shd[2]},0)`);
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.ellipse(dx, dy, r, r * .72, 0, 0, PI2);
+          ctx.fill();
+        }
       }
       ctx.restore();
     }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   }
 
   /* ── Fog ─────────────────────────────────────────────────────── */
@@ -785,7 +865,162 @@ class AtmCanvas {
     ctx.globalAlpha=1; ctx.lineCap='butt'; ctx.lineJoin='miter';
   }
 
-  /* ── Dust motes (sun beams) ──────────────────────────────────── */
+  /* ── Alien UFO ───────────────────────────────────────────────── */
+  _spawnUFO(w, h) {
+    const goRight = Math.random() > .5;
+    const dir = goRight ? 1 : -1;
+    // UFO enters fast, slows to hover in centre, waves, then zooms out
+    this._ufos.push({
+      x: goRight ? -80 : w + 80,
+      y: h * (.12 + Math.random() * .28),
+      dir,
+      phase: 'enter',    // enter → hover → exit
+      hoverX: w * (.35 + Math.random() * .30),
+      hoverFrames: 90 + Math.floor(Math.random() * 60),  // ~3-5s of hovering
+      hoverTimer: 0,
+      vx: dir * (2.2 + Math.random() * 1.2),
+      vy: 0,
+      bobPh: Math.random() * Math.PI * 2,
+      lightPh: 0,
+      armPh: 0,
+      armOut: 0,       // 0=arm in, 1=arm waving
+      scale: 0.55 + Math.random() * .30,
+      beamOp: 0,
+    });
+  }
+
+  _dUFO(ctx, w, h) {
+    // Rare: ~once every 8-12 minutes on average, any condition
+    this._ufoTimer++;
+    if (this._ufos.length === 0 && this._ufoTimer > 480 && Math.random() < .0015) {
+      this._ufoTimer = 0;
+      this._spawnUFO(w, h);
+    }
+
+    const dark = this._isDark;
+    const PI2 = Math.PI * 2;
+
+    for (let i = this._ufos.length - 1; i >= 0; i--) {
+      const u = this._ufos[i];
+      u.lightPh += .10;
+      u.bobPh   += .032;
+
+      if (u.phase === 'enter') {
+        u.x += u.vx;
+        // Decelerate as it approaches hoverX
+        const dist = Math.abs(u.hoverX - u.x);
+        if (dist < 60) u.vx *= .82;
+        if (Math.abs(u.vx) < .4) { u.phase = 'hover'; u.vx = 0; }
+      } else if (u.phase === 'hover') {
+        // Bob gently
+        u.x = u.hoverX + Math.sin(u.bobPh * .5) * 4;
+        u.y += Math.sin(u.bobPh) * .3;
+        u.hoverTimer++;
+        u.beamOp = Math.min(.45, u.beamOp + .02);
+        // Arm wave animation
+        u.armPh += .08;
+        u.armOut = Math.max(0, Math.sin(u.armPh * .4));
+        if (u.hoverTimer > u.hoverFrames) {
+          u.phase = 'exit';
+          u.vx = u.dir * (3.5 + Math.random() * 2);
+          u.vy = -(1.5 + Math.random());
+          u.beamOp = 0;
+        }
+      } else {
+        // Exit: accelerate away
+        u.vx *= 1.06;
+        u.vy *= 1.04;
+        u.x += u.vx; u.y += u.vy;
+      }
+
+      const sc = u.scale;
+      ctx.save(); ctx.translate(u.x, u.y + Math.sin(u.bobPh) * 2);
+
+      // Tractor beam (hover phase only)
+      if (u.beamOp > .01) {
+        const bg = ctx.createLinearGradient(0, 0, 0, 38 * sc);
+        bg.addColorStop(0, `rgba(120,255,180,${u.beamOp})`);
+        bg.addColorStop(1, `rgba(120,255,180,0)`);
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        ctx.moveTo(-14*sc, 4*sc);
+        ctx.lineTo(14*sc, 4*sc);
+        ctx.lineTo(24*sc, 38*sc);
+        ctx.lineTo(-24*sc, 38*sc);
+        ctx.closePath(); ctx.fill();
+      }
+
+      // Saucer body — dark underside
+      ctx.globalAlpha = 1;
+      const bodyGrad = ctx.createRadialGradient(0, -4*sc, 0, 0, 0, 22*sc);
+      bodyGrad.addColorStop(0, dark?'rgba(160,175,195,1)':'rgba(190,205,220,1)');
+      bodyGrad.addColorStop(.5, dark?'rgba(90,105,125,1)':'rgba(140,158,178,1)');
+      bodyGrad.addColorStop(1,  dark?'rgba(40,48,62,1)':'rgba(80,95,115,1)');
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath(); ctx.ellipse(0, 2*sc, 22*sc, 7*sc, 0, 0, PI2); ctx.fill();
+
+      // Dome
+      const domeGrad = ctx.createRadialGradient(-4*sc, -8*sc, 0, 0, -4*sc, 12*sc);
+      domeGrad.addColorStop(0,  'rgba(160,240,255,.92)');
+      domeGrad.addColorStop(.42,'rgba(80,200,240,.70)');
+      domeGrad.addColorStop(.82,'rgba(30,120,180,.45)');
+      domeGrad.addColorStop(1,  'rgba(10,60,120,.20)');
+      ctx.fillStyle = domeGrad;
+      ctx.beginPath(); ctx.ellipse(0, 0, 12*sc, 9*sc, 0, Math.PI, PI2); ctx.fill();
+
+      // Dome rim
+      ctx.strokeStyle = dark?'rgba(140,220,255,.55)':'rgba(80,180,240,.50)';
+      ctx.lineWidth = .8*sc; ctx.beginPath();
+      ctx.ellipse(0, 0, 12*sc, 1.5*sc, 0, 0, PI2); ctx.stroke();
+
+      // Rotating colour lights around rim
+      const numLights = 5;
+      for (let l = 0; l < numLights; l++) {
+        const ang = (l/numLights)*PI2 + u.lightPh;
+        const lx = Math.cos(ang)*18*sc, ly = Math.sin(ang)*5*sc + 2*sc;
+        const hue = (l/numLights)*360 + u.lightPh*30;
+        const blink = 0.5 + Math.sin(u.lightPh*3 + l*1.2)*0.5;
+        ctx.globalAlpha = .7 + blink*.3;
+        // Glow
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        const lg = ctx.createRadialGradient(lx,ly,0,lx,ly,4*sc);
+        lg.addColorStop(0,`hsla(${hue},100%,75%,.7)`); lg.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle=lg; ctx.beginPath(); ctx.arc(lx,ly,4*sc,0,PI2); ctx.fill();
+        ctx.restore();
+        // Dot
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = `hsla(${hue},100%,72%,1)`;
+        ctx.beginPath(); ctx.arc(lx, ly, 2.2*sc, 0, PI2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // Alien arm wave (hover phase)
+      if (u.phase === 'hover' && u.armOut > .05) {
+        // Tiny alien visible in dome
+        ctx.save(); ctx.globalAlpha = .80;
+        ctx.strokeStyle = dark?'rgba(80,230,180,1)':'rgba(40,180,140,1)';
+        ctx.lineWidth = 1.5*sc; ctx.lineCap = 'round';
+        const aDir = u.dir;
+        const armAngle = -0.6 + u.armOut * Math.sin(u.armPh) * 1.2;
+        // Head
+        ctx.fillStyle = dark?'rgba(100,230,180,1)':'rgba(50,200,150,1)';
+        ctx.beginPath(); ctx.arc(2*sc*aDir, -6*sc, 2.2*sc, 0, PI2); ctx.fill();
+        // Body
+        ctx.beginPath(); ctx.moveTo(2*sc*aDir,-4*sc); ctx.lineTo(2*sc*aDir,-1*sc); ctx.stroke();
+        // Waving arm
+        const ax = 2*sc*aDir + Math.cos(armAngle)*(aDir>0?4:-4)*sc;
+        const ay = -3*sc + Math.sin(armAngle)*4*sc;
+        ctx.beginPath(); ctx.moveTo(2*sc*aDir,-3*sc); ctx.lineTo(ax,ay); ctx.stroke();
+        ctx.restore();
+      }
+
+      ctx.restore();
+
+      // Remove when off screen
+      if (u.x < -200 || u.x > w + 200 || u.y < -120) this._ufos.splice(i, 1);
+    }
+    ctx.globalAlpha = 1;
+  }
   _dDustMotes(ctx, w, h) {
     ctx.save(); ctx.globalCompositeOperation=this._isDark?'lighter':'source-over';
     const light=!this._isDark, m=light?2.2:2.8;
@@ -820,17 +1055,23 @@ class AtmCanvas {
 
   /* ── Rain ────────────────────────────────────────────────────── */
   _dRain(ctx, w, h) {
-    ctx.lineCap='round';
+    ctx.lineCap = 'round';
+    // Light theme: make rain noticeably darker so it reads against blue sky
+    const col = this._isDark ? 'rgba(178,208,245,1)' : 'rgba(55,88,140,1)';
+    const opBoost = this._isDark ? 1.0 : 1.6; // brighter on light bg
     for (const p of this._rain) {
-      p.y+=p.vy; p.x+=p.vx;
-      if(p.y>h+14){p.y=-14;p.x=Math.random()*w;}
-      if(p.x<-8)p.x=w+8;
-      ctx.globalAlpha=p.op;
-      ctx.strokeStyle=this._isDark?'rgba(178,204,238,1)':'rgba(95,125,170,1)';
-      ctx.lineWidth=p.z*.70;
-      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+p.vx*1.65,p.y-p.len); ctx.stroke();
+      p.y += p.vy; p.x += p.vx;
+      if (p.y > h+14) { p.y = -14; p.x = Math.random()*w; }
+      if (p.x < -8) p.x = w+8;
+      ctx.globalAlpha = Math.min(1, p.op * opBoost);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = p.z * .85;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x + p.vx*1.8, p.y - p.len);
+      ctx.stroke();
     }
-    ctx.globalAlpha=1;
+    ctx.globalAlpha = 1;
   }
 
   /* ── Snow ────────────────────────────────────────────────────── */
@@ -925,18 +1166,31 @@ ha-card {
 .compact-wrap{position:relative;overflow:hidden;}
 #atm-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
 .compact-overlay{
-  position:absolute;inset:0;padding:16px 18px;
+  position:absolute;inset:0;padding:14px 18px 16px;
   display:flex;align-items:flex-end;justify-content:space-between;
   pointer-events:none;z-index:2;
-  background:linear-gradient(to top,rgba(0,0,0,0.25) 0%,transparent 55%);
+  background:linear-gradient(to top,rgba(0,0,0,0.32) 0%,rgba(0,0,0,0.08) 55%,transparent 100%);
 }
-.compact-left{display:flex;flex-direction:column;gap:2px;}
-.compact-temp{font-size:46px;font-weight:200;color:#fff;line-height:1;letter-spacing:-1px;text-shadow:0 2px 12px rgba(0,0,0,0.4);}
-.compact-temp sup{font-size:17px;font-weight:300;letter-spacing:0;vertical-align:super;}
-.compact-cond{font-size:13px;color:rgba(255,255,255,0.88);margin-top:3px;letter-spacing:.2px;text-shadow:0 1px 4px rgba(0,0,0,0.5);}
-.compact-hilo{font-size:11px;color:rgba(255,255,255,0.62);margin-top:2px;text-shadow:0 1px 3px rgba(0,0,0,0.4);}
-.compact-wind{font-size:11px;color:rgba(255,255,255,0.62);margin-top:2px;text-shadow:0 1px 3px rgba(0,0,0,0.4);display:flex;align-items:center;gap:3px;}
-.compact-wind ha-icon{--mdc-icon-size:12px;opacity:0.75;}
+/* Left: big temperature */
+.compact-left{display:flex;flex-direction:column;justify-content:flex-end;}
+.compact-temp{font-size:52px;font-weight:200;color:#fff;line-height:1;letter-spacing:-1px;text-shadow:0 2px 14px rgba(0,0,0,0.45);}
+.compact-temp sup{font-size:18px;font-weight:300;letter-spacing:0;vertical-align:super;}
+/* Right: info stack */
+.compact-right{
+  display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;
+  gap:3px;text-align:right;
+}
+.compact-cond{font-size:13px;font-weight:500;color:rgba(255,255,255,0.92);letter-spacing:.2px;text-shadow:0 1px 4px rgba(0,0,0,0.5);}
+.compact-hilo{font-size:11px;color:rgba(255,255,255,0.65);text-shadow:0 1px 3px rgba(0,0,0,0.4);}
+.compact-pills{display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:flex-end;margin-top:1px;}
+.compact-pill{
+  display:flex;align-items:center;gap:3px;
+  background:rgba(0,0,0,0.30);backdrop-filter:blur(8px);
+  border-radius:20px;padding:2px 8px;
+  font-size:11px;color:rgba(255,255,255,0.82);
+  text-shadow:none;border:0.5px solid rgba(255,255,255,0.12);
+}
+.compact-pill ha-icon{--mdc-icon-size:11px;opacity:0.70;}
 
 /* Map */
 .map-wrap{position:relative;height:340px;}
@@ -956,16 +1210,6 @@ ha-card {
   max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   pointer-events:none;transition:opacity .4s;
 }
-.map-controls{position:absolute;bottom:12px;left:12px;z-index:1000;display:flex;gap:7px;}
-.map-btn{
-  width:36px;height:36px;border-radius:10px;
-  background:rgba(12,12,18,0.92);backdrop-filter:blur(14px);
-  border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.75);font-size:14px;
-  display:flex;align-items:center;justify-content:center;
-  cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;user-select:none;
-}
-.map-btn:active{transform:scale(.88);background:rgba(38,38,50,.98);}
-.map-btn.on{color:var(--worm-ac);border-color:var(--worm-ac);box-shadow:0 0 10px var(--worm-glow);}
 .map-legend{
   position:absolute;bottom:12px;right:12px;z-index:1000;
   background:rgba(12,12,18,0.92);backdrop-filter:blur(14px);
@@ -1239,9 +1483,11 @@ class WormWeatherCard extends HTMLElement {
           '<div class="compact-overlay">' +
             '<div class="compact-left">' +
               '<div class="compact-temp" id="cmp-temp">—</div>' +
+            '</div>' +
+            '<div class="compact-right">' +
               '<div class="compact-cond" id="cmp-cond">—</div>' +
               '<div class="compact-hilo" id="cmp-hilo"></div>' +
-              '<div class="compact-wind" id="cmp-wind" style="display:none"></div>' +
+              '<div class="compact-pills" id="cmp-pills"></div>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -1253,12 +1499,6 @@ class WormWeatherCard extends HTMLElement {
             '<div id="lf-map"></div>' +
             '<div class="map-time-tag" id="map-time">Loading…</div>' +
             '<div class="map-loc-tag" id="map-loc" style="opacity:0"></div>' +
-            '<div class="map-controls">' +
-              `<div class="map-btn" id="b-play">${ico('mdi:play')}</div>` +
-              `<div class="map-btn" id="b-prev">${ico('mdi:skip-previous')}</div>` +
-              `<div class="map-btn" id="b-next">${ico('mdi:skip-next')}</div>` +
-              `<div class="map-btn" id="b-rc" title="Re-centre">${ico('mdi:crosshairs-gps')}</div>` +
-            '</div>' +
             '<div class="map-legend"><div class="leg-t">Rainfall</div><div class="leg-bar"></div><div class="leg-lbls"><span class="leg-l">Light</span><span class="leg-l">Heavy</span></div></div>' +
             '<div class="fpbar-wrap"><div class="fpbar" id="fpbar" style="width:0%"></div></div>' +
           '</div>' +
@@ -1392,18 +1632,10 @@ class WormWeatherCard extends HTMLElement {
       fireMoreInfo
     );
 
-    // ── Map / tab buttons (stop propagation so they don't collapse) ──
-    ['b-play','b-prev','b-next','b-rc'].forEach(id => {
-      $( id)?.addEventListener('click', e => e.stopPropagation());
-    });
+    // ── Tab buttons ──
     ['t-radar','t-weather','t-forecast'].forEach(t => {
       $(t)?.addEventListener('click', e => { e.stopPropagation(); this._switchTab(t.replace('t-','')); });
     });
-
-    $('b-play').addEventListener('click', () => this._toggleAnim());
-    $('b-prev').addEventListener('click', () => { this._stopAnim(); this._step(-1); });
-    $('b-next').addEventListener('click', () => { this._stopAnim(); this._step(1); });
-    $('b-rc').addEventListener('click', () => { if (this._map) this._map.setView([this._lat, this._lon], this._zoom, { animate:true }); });
   }
 
   _toggleSize() {
@@ -1417,7 +1649,7 @@ class WormWeatherCard extends HTMLElement {
       this._loadForecast().then(() => this._updateExpandedContent());
       this._updateExpandedContent();
     } else {
-      if (this._timer) { clearInterval(this._timer); this._timer = null; this._playing = false; }
+      this._stopAnim();
       this._initAtm();
     }
   }
@@ -1461,25 +1693,35 @@ class WormWeatherCard extends HTMLElement {
     const cond = st ? (st.state || '') : '';
     const u    = this._cfg.temp_unit || '°C';
     const wu   = this._cfg.wind_unit || 'km/h';
-    const srcT = a.temperature_unit  || '°C';
-    const srcW = a.wind_speed_unit   || 'km/h';
+    const srcT = a.temperature_unit || '°C';
+    const srcW = a.wind_speed_unit  || 'km/h';
+
+    // Temperature
     s.getElementById('cmp-temp').innerHTML = `${cvtTempD(a.temperature, u, srcT)}<sup>${u}</sup>`;
+
+    // Condition
     s.getElementById('cmp-cond').textContent = W_LABELS[cond] || cond || '—';
+
+    // H/L
     const hi = a.temperature_high != null ? cvtTemp(a.temperature_high, u, srcT) : null;
     const lo = a.temperature_low  != null ? cvtTemp(a.temperature_low,  u, srcT) : null;
-    s.getElementById('cmp-hilo').textContent = (hi!=null&&lo!=null) ? `H: ${hi}° · L: ${lo}°` : '';
-    // Wind speed on compact
-    const windEl = s.getElementById('cmp-wind');
-    if (windEl) {
+    s.getElementById('cmp-hilo').textContent = (hi != null && lo != null) ? `H: ${hi}° · L: ${lo}°` : '';
+
+    // Pills: humidity + optional wind
+    const pillsEl = s.getElementById('cmp-pills');
+    if (pillsEl) {
+      let pills = '';
+      if (a.humidity != null) {
+        pills += `<span class="compact-pill">${ico('mdi:water-percent',11,'vertical-align:middle;')} ${Math.round(a.humidity)}%</span>`;
+      }
       if (this._cfg.show_wind_on_compact && a.wind_speed != null) {
         const ws  = cvtWind(a.wind_speed, wu, srcW);
-        const dir = a.wind_bearing != null ? ' · ' + wdir(a.wind_bearing) : '';
-        windEl.innerHTML = `${ico('mdi:weather-windy',12,'vertical-align:middle;')} ${ws} ${wu}${dir}`;
-        windEl.style.display = 'flex';
-      } else {
-        windEl.style.display = 'none';
+        const dir = a.wind_bearing != null ? ' ' + wdir(a.wind_bearing) : '';
+        pills += `<span class="compact-pill">${ico('mdi:weather-windy',11,'vertical-align:middle;')} ${ws} ${wu}${dir}</span>`;
       }
+      pillsEl.innerHTML = pills;
     }
+
     // Update canvas animation state
     if (this._atm) {
       const isNight = cond === 'clear-night' || (this._hass && this._hass.states['sun.sun']?.state === 'below_horizon');
@@ -1540,7 +1782,6 @@ class WormWeatherCard extends HTMLElement {
     const tl    = TILES[style] || TILES.standard;
     this._map = L.map(el, { zoomControl:false, attributionControl:false })
                  .setView([this._lat, this._lon], this._zoom);
-    L.control.zoom({ position:'topright' }).addTo(this._map);
     L.control.attribution({ position:'bottomright', prefix:false }).addTo(this._map);
     L.tileLayer(tl.url, {
       attribution: tl.attr, maxZoom:19,
@@ -1624,9 +1865,8 @@ class WormWeatherCard extends HTMLElement {
   _startAnim() {
     this._stopAnim();
     if (this._frames.length < 2) return;
-    this._playing = true; this._updatePlayBtn();
+    this._playing = true;
     const speed = parseInt(this._cfg.animation_speed) || 600;
-    // Use RAF-based loop for smooth, jank-free animation
     let lastTick = 0;
     const tick = (ts) => {
       if (!this._playing) return;
@@ -1643,19 +1883,9 @@ class WormWeatherCard extends HTMLElement {
   _stopAnim() {
     if (this._rafAnim) { cancelAnimationFrame(this._rafAnim); this._rafAnim = null; }
     if (this._timer)   { clearInterval(this._timer); this._timer = null; }
-    this._playing = false; this._updatePlayBtn();
+    this._playing = false;
   }
   _toggleAnim(){ this._playing ? this._stopAnim() : this._startAnim(); }
-  _step(d) {
-    if (!this._frames.length) return;
-    this._fi = (this._fi + d + this._frames.length) % this._frames.length;
-    this._showFrame(this._fi, true); // instant on manual step
-  }
-  _updatePlayBtn() {
-    const b = this.shadowRoot.getElementById('b-play'); if (!b) return;
-    b.innerHTML = this._playing ? ico('mdi:pause') : ico('mdi:play');
-    b.classList.toggle('on', this._playing);
-  }
 
   /* ── Weather HTML ── */
   _wxHTML() {
