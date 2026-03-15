@@ -947,23 +947,23 @@ ha-card {
 .tab-l{font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:rgba(255,255,255,0.3);transition:color .2s;}
 .tab.on .tab-l{color:var(--worm-ac);}
 
-/* Weather content */
-.wx-wrap{padding:4px 16px 20px;}
-.wx-current{display:flex;align-items:center;justify-content:space-between;padding:16px 0 10px;}
-.wx-temp{font-size:72px;font-weight:200;color:#fff;line-height:1;letter-spacing:-4px;}
-.wx-temp sup{font-size:24px;font-weight:300;letter-spacing:0;vertical-align:super;}
-.wx-cond{font-size:15px;color:rgba(255,255,255,0.6);margin-top:6px;}
-.wx-hl{font-size:12px;color:rgba(255,255,255,0.35);margin-top:3px;}
-.wx-ico{--mdc-icon-size:66px;color:rgba(255,255,255,0.92);filter:drop-shadow(0 4px 16px rgba(0,0,0,.5));}
+/* Weather content — same compact sizing as Forecast tab */
+.wx-wrap{padding:4px 16px 16px;}
+.wx-current{display:flex;align-items:center;justify-content:space-between;padding:10px 0 6px;}
+.wx-temp{font-size:58px;font-weight:200;color:#fff;line-height:1;letter-spacing:-3px;}
+.wx-temp sup{font-size:20px;font-weight:300;letter-spacing:0;vertical-align:super;}
+.wx-cond{font-size:14px;color:rgba(255,255,255,0.6);margin-top:4px;}
+.wx-hl{font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;}
+.wx-ico{--mdc-icon-size:54px;color:rgba(255,255,255,0.92);filter:drop-shadow(0 4px 16px rgba(0,0,0,.5));}
 .feels-chip{
   display:inline-flex;align-items:center;gap:6px;
   background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.07);
-  border-radius:20px;padding:5px 13px;margin-bottom:18px;
+  border-radius:20px;padding:4px 12px;margin-bottom:12px;
 }
 .feels-chip .fl{font-size:12px;color:rgba(255,255,255,0.42);}
 .feels-chip .fv{font-size:12px;font-weight:600;color:#fff;}
-.sec-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,0.3);margin-bottom:10px;}
-.hrow{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:18px;scrollbar-width:none;}
+.sec-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,0.3);margin-bottom:8px;}
+.hrow{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:none;}
 .hrow::-webkit-scrollbar{display:none;}
 .hitem{
   flex:0 0 58px;background:rgba(255,255,255,0.04);border-radius:14px;padding:10px 4px;
@@ -985,7 +985,7 @@ ha-card {
 .dtemps{display:flex;gap:8px;}
 .dhi{font-size:13px;font-weight:600;color:#fff;}
 .dlo{font-size:13px;color:rgba(255,255,255,0.35);}
-.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
 .tile{background:rgba(255,255,255,0.03);border-radius:14px;padding:14px;border:1px solid rgba(255,255,255,0.06);}
 .tile-hdr{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
 .tile-ico{--mdc-icon-size:14px;color:rgba(255,255,255,0.38);}
@@ -1434,17 +1434,21 @@ class WormWeatherCard extends HTMLElement {
 
   /* ── Resolve whether HA is in dark mode ── */
   _isDarkMode() {
-    // hass.themes.darkMode is the authoritative flag in modern HA
-    // It can be: true, false, or undefined (no theme set → default light)
-    const dm = this._hass?.themes?.darkMode;
-    if (dm === true) return true;
-    if (dm === false) return false;
-    // Fallback: check if the body has a dark class (some older HA builds)
-    try {
-      const body = document.querySelector('home-assistant')?.shadowRoot?.querySelector('home-assistant-main')?.shadowRoot?.querySelector('ha-panel-lovelace')?.shadowRoot?.querySelector('hui-root')?.shadowRoot?.querySelector('div');
-      if (body && body.classList.contains('dark')) return true;
-    } catch (_) {}
-    return false; // default to light
+    // Follow the sun: dark theme after sunset, light theme after sunrise.
+    // Primary source: sun.sun entity (most accurate — set by HA from your location).
+    // Fallback: weather entity state 'clear-night' as a secondary signal.
+    // Last resort: wall-clock hour (6 pm–6 am = dark).
+    const sun = this._hass?.states?.['sun.sun'];
+    if (sun) {
+      return sun.state === 'below_horizon';
+    }
+    // No sun entity — check if the weather condition is a night state
+    const eid  = this._cfg?.weather_entity;
+    const cond = eid ? (this._hass?.states?.[eid]?.state || '') : '';
+    if (cond === 'clear-night') return true;
+    // Final fallback: local clock (6pm–6am = dark)
+    const h = new Date().getHours();
+    return h >= 18 || h < 6;
   }
 
   /* ── Map ── */
@@ -1597,7 +1601,6 @@ class WormWeatherCard extends HTMLElement {
     const fc    = this._forecast.length ? this._forecast : (a.forecast || []);
     const now   = Date.now();
     const hourly = fc.filter(f => { const d=new Date(f.datetime)-now; return d>-3.6e6 && d<9.36e7; }).slice(0,12);
-    const daily  = fc.filter(f => new Date(f.datetime) > new Date()).slice(0,7);
     let ws = a.wind_speed;
     if (ws != null) { if (wu==='mph') ws=Math.round(ws*0.621371)+''; else if (wu==='m/s') ws=(ws/3.6).toFixed(1); else ws=Math.round(ws)+''; } else ws='—';
 
@@ -1617,19 +1620,6 @@ class WormWeatherCard extends HTMLElement {
           <div class="hi">${wico(f.condition,18)}</div>
           <div class="htmp">${cvt(f.temperature,u)}°</div>
           ${f.precipitation_probability!=null?`<div class="hrn">${Math.round(f.precipitation_probability)}%</div>`:''}
-        </div>`;
-      });
-      h += '</div>';
-    }
-
-    if (this._cfg.show_daily !== false && daily.length) {
-      h += '<div class="sec-hdr">7-Day Forecast</div><div class="dlist">';
-      daily.forEach((f,i) => {
-        h += `<div class="drow">
-          <div class="dday">${i===0?'Today':fmtD(f.datetime)}</div>
-          <div class="dico">${wico(f.condition,20)}</div>
-          <div class="drn">${f.precipitation_probability!=null?`${ico('mdi:water-outline',12)} ${Math.round(f.precipitation_probability)}%`:''}</div>
-          <div class="dtemps"><span class="dhi">${cvt(f.temperature,u)}°</span><span class="dlo">${f.templow!=null?cvt(f.templow,u)+'°':'—'}</span></div>
         </div>`;
       });
       h += '</div>';
@@ -1936,13 +1926,8 @@ class WormWeatherCardEditor extends HTMLElement {
     </div>
     <div class="row">
       <div class="row-icon" style="background:rgba(94,92,230,0.12)">${ico('mdi:clock-outline',16,'color:#5E5CE6')}</div>
-      <div class="row-info"><div class="row-label">Hourly Forecast</div><div class="row-sub">Scrollable strip</div></div>
+      <div class="row-info"><div class="row-label">Hourly Forecast Strip</div><div class="row-sub">Show hourly strip on Weather tab</div></div>
       <div class="row-ctrl">${this._tog('tog-hourly', c.show_hourly!==false)}</div>
-    </div>
-    <div class="row">
-      <div class="row-icon" style="background:rgba(255,55,95,0.12)">${ico('mdi:calendar-week',16,'color:#FF375F')}</div>
-      <div class="row-info"><div class="row-label">Daily Forecast</div><div class="row-sub">7-day list</div></div>
-      <div class="row-ctrl">${this._tog('tog-daily', c.show_daily!==false)}</div>
     </div>
     <div class="row">
       <div class="row-icon" style="background:rgba(255,159,10,0.12)">${ico('mdi:chart-bar',16,'color:#FF9F0A')}</div>
@@ -1981,7 +1966,6 @@ class WormWeatherCardEditor extends HTMLElement {
     // Update toggles
     const ta=s.getElementById('tog-anim');if(ta)ta.checked=c.auto_animate!==false;
     const th=s.getElementById('tog-hourly');if(th)th.checked=c.show_hourly!==false;
-    const td=s.getElementById('tog-daily');if(td)td.checked=c.show_daily!==false;
     const tdt=s.getElementById('tog-details');if(tdt)tdt.checked=c.show_details!==false;
     const twc=s.getElementById('tog-windcmp');if(twc)twc.checked=c.show_wind_on_compact===true;
     // Update seg opts
@@ -2020,7 +2004,6 @@ class WormWeatherCardEditor extends HTMLElement {
     // Toggles
     s.getElementById('tog-anim')?.addEventListener('change', e => this._updateConfig('auto_animate', e.target.checked));
     s.getElementById('tog-hourly')?.addEventListener('change', e => this._updateConfig('show_hourly', e.target.checked));
-    s.getElementById('tog-daily')?.addEventListener('change', e => this._updateConfig('show_daily', e.target.checked));
     s.getElementById('tog-details')?.addEventListener('change', e => this._updateConfig('show_details', e.target.checked));
     s.getElementById('tog-windcmp')?.addEventListener('change', e => this._updateConfig('show_wind_on_compact', e.target.checked));
     // Segmented controls
