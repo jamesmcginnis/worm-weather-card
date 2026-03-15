@@ -1474,6 +1474,12 @@ class WormWeatherCard extends HTMLElement {
     const ac  = this._cfg.accent_color || '#5AC8FA';
     const ch  = parseInt(this._cfg.compact_height) || 160;
     const exp = this._expanded;
+    // Determine which expanded tab should start active
+    const dv  = this._cfg.default_view || 'compact';
+    const initTab = exp ? (dv === 'weather' ? 'weather' : dv === 'forecast' ? 'forecast' : 'radar') : 'radar';
+    const radarActive    = initTab === 'radar';
+    const weatherActive  = initTab === 'weather';
+    const forecastActive = initTab === 'forecast';
     this.shadowRoot.innerHTML =
       `<style>${CARD_CSS}:host{--worm-ac:${ac};--worm-glow:${ac}55}</style>` +
       '<ha-card>' +
@@ -1494,7 +1500,7 @@ class WormWeatherCard extends HTMLElement {
       '</div>' +
       `<div class="view${exp?' active':''}" id="v-expanded">` +
         '<div class="collapse-handle" id="collapse-handle"></div>' +
-        '<div class="view active" id="v-radar">' +
+        `<div class="view${radarActive?' active':''}" id="v-radar">` +
           '<div class="map-wrap">' +
             '<div id="lf-map"></div>' +
             '<div class="map-time-tag" id="map-time">Loading…</div>' +
@@ -1503,12 +1509,12 @@ class WormWeatherCard extends HTMLElement {
             '<div class="fpbar-wrap"><div class="fpbar" id="fpbar" style="width:0%"></div></div>' +
           '</div>' +
         '</div>' +
-        '<div class="view" id="v-weather"><div class="wx-wrap" id="wx-content"></div></div>' +
-        '<div class="view" id="v-forecast"><div class="fc-wrap" id="fc-content"></div></div>' +
+        `<div class="view${weatherActive?' active':''}" id="v-weather"><div class="wx-wrap" id="wx-content"></div></div>` +
+        `<div class="view${forecastActive?' active':''}" id="v-forecast"><div class="fc-wrap" id="fc-content"></div></div>` +
         '<div class="tabs">' +
-          `<div class="tab on" id="t-radar"><ha-icon class="tab-i" icon="mdi:radar"></ha-icon><span class="tab-l">Radar</span></div>` +
-          `<div class="tab" id="t-weather"><ha-icon class="tab-i" icon="mdi:weather-partly-cloudy"></ha-icon><span class="tab-l">Weather</span></div>` +
-          `<div class="tab" id="t-forecast"><ha-icon class="tab-i" icon="mdi:calendar-week"></ha-icon><span class="tab-l">Forecast</span></div>` +
+          `<div class="tab${radarActive?' on':''}" id="t-radar"><ha-icon class="tab-i" icon="mdi:radar"></ha-icon><span class="tab-l">Radar</span></div>` +
+          `<div class="tab${weatherActive?' on':''}" id="t-weather"><ha-icon class="tab-i" icon="mdi:weather-partly-cloudy"></ha-icon><span class="tab-l">Weather</span></div>` +
+          `<div class="tab${forecastActive?' on':''}" id="t-forecast"><ha-icon class="tab-i" icon="mdi:calendar-week"></ha-icon><span class="tab-l">Forecast</span></div>` +
         '</div>' +
       '</div>' +
       '</ha-card>';
@@ -1517,9 +1523,12 @@ class WormWeatherCard extends HTMLElement {
 
   _postRender() {
     this._updateCompact();
-    if (!this._expanded) { this._initAtm(); }
-    else {
-      this._initMapAsync();
+    if (!this._expanded) {
+      this._initAtm();
+    } else {
+      const dv = this._cfg.default_view || 'radar';
+      // Only init the map if radar is the active tab
+      if (dv !== 'weather' && dv !== 'forecast') this._initMapAsync();
       this._loadForecast().then(() => this._updateExpandedContent());
       this._updateExpandedContent();
     }
@@ -2174,11 +2183,6 @@ class WormWeatherCardEditor extends HTMLElement {
       <div class="row-info"><div class="row-label">Compact Height</div><div class="row-sub">Pixels in compact mode</div></div>
       <div class="row-ctrl"><input type="range" class="sl" id="sl-ch" min="120" max="260" step="10" value="${c.compact_height||160}"><span class="sl-val" id="slv-ch">${c.compact_height||160}px</span></div>
     </div>
-    <div class="row">
-      <div class="row-icon" style="background:rgba(255,159,10,0.12)">${ico('mdi:palette',16,'color:#FF9F0A')}</div>
-      <div class="row-info"><div class="row-label">Accent Colour</div></div>
-      <div class="row-ctrl"><input type="color" id="accent-color" value="${c.accent_color||'#5AC8FA'}" style="width:36px;height:28px;border-radius:7px;border:1px solid rgba(0,0,0,0.1);cursor:pointer;padding:2px"></div>
-    </div>
   </div></div>
 
   <!-- LOCATION -->
@@ -2259,11 +2263,6 @@ class WormWeatherCardEditor extends HTMLElement {
       </div>
     </div>
     <div class="row">
-      <div class="row-icon" style="background:rgba(94,92,230,0.12)">${ico('mdi:clock-outline',16,'color:#5E5CE6')}</div>
-      <div class="row-info"><div class="row-label">Hourly Forecast Strip</div><div class="row-sub">Show hourly strip on Weather tab</div></div>
-      <div class="row-ctrl">${this._tog('tog-hourly', c.show_hourly!==false)}</div>
-    </div>
-    <div class="row">
       <div class="row-icon" style="background:rgba(255,159,10,0.12)">${ico('mdi:chart-bar',16,'color:#FF9F0A')}</div>
       <div class="row-info"><div class="row-label">Condition Tiles</div><div class="row-sub">Humidity, wind, UV…</div></div>
       <div class="row-ctrl">${this._tog('tog-details', c.show_details!==false)}</div>
@@ -2299,14 +2298,11 @@ class WormWeatherCardEditor extends HTMLElement {
     const slsp=s.getElementById('sl-spd'); if(slsp){slsp.value=c.animation_speed||600;const v=s.getElementById('slv-spd');if(v)v.textContent=(c.animation_speed||600)+'ms';}
     // Update toggles
     const ta=s.getElementById('tog-anim');if(ta)ta.checked=c.auto_animate!==false;
-    const th=s.getElementById('tog-hourly');if(th)th.checked=c.show_hourly!==false;
     const tdt=s.getElementById('tog-details');if(tdt)tdt.checked=c.show_details!==false;
     const twc=s.getElementById('tog-windcmp');if(twc)twc.checked=c.show_wind_on_compact===true;
     // Update seg opts
     s.querySelectorAll('[data-seg="default_view"]').forEach(el=>el.classList.toggle('on',el.dataset.val===(c.default_view||'compact')));
     s.querySelectorAll('[data-seg="temp_unit"]').forEach(el=>el.classList.toggle('on',el.dataset.val===(c.temp_unit||'°C')));
-    // Update accent
-    const ac=s.getElementById('accent-color');if(ac)ac.value=c.accent_color||'#5AC8FA';
     // Update postcode display
     const pc=s.getElementById('inp-postcode');if(pc)pc.value=c.postcode||'';
     const cc=s.getElementById('inp-cc');if(cc)cc.value=c.country_code||'';
@@ -2327,8 +2323,6 @@ class WormWeatherCardEditor extends HTMLElement {
     if (pc) { pc.addEventListener('blur', e => this._updateConfig('postcode', e.target.value.trim())); pc.addEventListener('keydown', e => { if(e.key==='Enter')e.target.blur(); }); }
     const cc = s.getElementById('inp-cc');
     if (cc) { cc.addEventListener('blur', e => this._updateConfig('country_code', e.target.value.trim().toUpperCase())); cc.addEventListener('keydown', e => { if(e.key==='Enter')e.target.blur(); }); }
-    // Accent colour
-    s.getElementById('accent-color')?.addEventListener('input', e => this._updateConfig('accent_color', e.target.value));
     // Sliders
     const sl=(id,key,mul,sfx)=>{
       const el=s.getElementById('sl-'+id), vl=s.getElementById('slv-'+id);
@@ -2337,7 +2331,6 @@ class WormWeatherCardEditor extends HTMLElement {
     sl('ch','compact_height',null,'px'); sl('zoom','zoom_level',null,''); sl('op','radar_opacity',0.01,'%'); sl('spd','animation_speed',null,'ms');
     // Toggles
     s.getElementById('tog-anim')?.addEventListener('change', e => this._updateConfig('auto_animate', e.target.checked));
-    s.getElementById('tog-hourly')?.addEventListener('change', e => this._updateConfig('show_hourly', e.target.checked));
     s.getElementById('tog-details')?.addEventListener('change', e => this._updateConfig('show_details', e.target.checked));
     s.getElementById('tog-windcmp')?.addEventListener('change', e => this._updateConfig('show_wind_on_compact', e.target.checked));
     // Segmented controls
