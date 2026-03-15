@@ -99,6 +99,48 @@ const fmtD = iso => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(iso).ge
 const cvt  = (v,u) => v == null ? '—' : u === '°F' ? Math.round(v * 9/5 + 32) : Math.round(v);
 // One decimal place — used for the mini card temperature
 const cvtD = (v,u) => v == null ? '—' : u === '°F' ? (v * 9/5 + 32).toFixed(1) : parseFloat(v).toFixed(1);
+
+// Convert temperature from its native source unit to the display unit the user chose.
+// HA exposes the entity's native unit via attributes.temperature_unit.
+// If the entity already reports in the display unit, no conversion is needed.
+const cvtTemp = (v, displayUnit, sourceUnit) => {
+  if (v == null) return '—';
+  const src = sourceUnit || '°C';
+  // Normalise to °C first
+  const c = src === '°F' ? (v - 32) * 5/9 : src === 'K' ? v - 273.15 : v;
+  return displayUnit === '°F' ? Math.round(c * 9/5 + 32) : Math.round(c);
+};
+const cvtTempD = (v, displayUnit, sourceUnit) => {
+  if (v == null) return '—';
+  const src = sourceUnit || '°C';
+  const c = src === '°F' ? (v - 32) * 5/9 : src === 'K' ? v - 273.15 : v;
+  return (displayUnit === '°F' ? c * 9/5 + 32 : c).toFixed(1);
+};
+
+// Convert wind speed from its native source unit to the display unit the user chose.
+// HA exposes the entity's native unit via attributes.wind_speed_unit.
+// Supported HA wind units: km/h, m/s, mph, kn (knots), ft/s
+const cvtWind = (v, displayUnit, sourceUnit) => {
+  if (v == null) return null;
+  const src = sourceUnit || 'km/h';
+  // Convert source → m/s as canonical intermediate
+  let ms;
+  switch (src) {
+    case 'm/s':   ms = v;           break;
+    case 'km/h':  ms = v / 3.6;     break;
+    case 'mph':   ms = v * 0.44704; break;
+    case 'kn':    ms = v * 0.514444;break;
+    case 'ft/s':  ms = v * 0.3048;  break;
+    default:      ms = v / 3.6;     break; // assume km/h
+  }
+  // Convert m/s → display unit
+  switch (displayUnit) {
+    case 'm/s':  return ms.toFixed(1);
+    case 'mph':  return Math.round(ms * 2.23694) + '';
+    case 'km/h':
+    default:     return Math.round(ms * 3.6) + '';
+  }
+};
 const uvl  = u => !u ? '' : u <= 2 ? 'Low' : u <= 5 ? 'Moderate' : u <= 7 ? 'High' : u <= 10 ? 'Very High' : 'Extreme';
 const wico = (state, sz=24, style='') => `<ha-icon icon="${W_ICONS[state]||'mdi:weather-cloudy'}" style="--mdc-icon-size:${sz}px;display:inline-flex;align-items:center;${style}"></ha-icon>`;
 const ico  = (icon, sz=20, style='') => `<ha-icon icon="${icon}" style="--mdc-icon-size:${sz}px;display:inline-flex;align-items:center;${style}"></ha-icon>`;
@@ -1419,19 +1461,18 @@ class WormWeatherCard extends HTMLElement {
     const cond = st ? (st.state || '') : '';
     const u    = this._cfg.temp_unit || '°C';
     const wu   = this._cfg.wind_unit || 'km/h';
-    s.getElementById('cmp-temp').innerHTML = `${cvtD(a.temperature, u)}<sup>${u}</sup>`;
+    const srcT = a.temperature_unit  || '°C';
+    const srcW = a.wind_speed_unit   || 'km/h';
+    s.getElementById('cmp-temp').innerHTML = `${cvtTempD(a.temperature, u, srcT)}<sup>${u}</sup>`;
     s.getElementById('cmp-cond').textContent = W_LABELS[cond] || cond || '—';
-    const hi = a.temperature_high != null ? cvt(a.temperature_high, u) : null;
-    const lo = a.temperature_low  != null ? cvt(a.temperature_low,  u) : null;
+    const hi = a.temperature_high != null ? cvtTemp(a.temperature_high, u, srcT) : null;
+    const lo = a.temperature_low  != null ? cvtTemp(a.temperature_low,  u, srcT) : null;
     s.getElementById('cmp-hilo').textContent = (hi!=null&&lo!=null) ? `H: ${hi}° · L: ${lo}°` : '';
     // Wind speed on compact
     const windEl = s.getElementById('cmp-wind');
     if (windEl) {
       if (this._cfg.show_wind_on_compact && a.wind_speed != null) {
-        let ws = a.wind_speed;
-        if (wu==='mph') ws = Math.round(ws*0.621371);
-        else if (wu==='m/s') ws = (ws/3.6).toFixed(1);
-        else ws = Math.round(ws);
+        const ws  = cvtWind(a.wind_speed, wu, srcW);
         const dir = a.wind_bearing != null ? ' · ' + wdir(a.wind_bearing) : '';
         windEl.innerHTML = `${ico('mdi:weather-windy',12,'vertical-align:middle;')} ${ws} ${wu}${dir}`;
         windEl.style.display = 'flex';
@@ -1625,22 +1666,23 @@ class WormWeatherCard extends HTMLElement {
     const a  = st.attributes || {};
     const u  = this._cfg.temp_unit || '°C';
     const wu = this._cfg.wind_unit || 'km/h';
+    const srcT = a.temperature_unit || '°C';
+    const srcW = a.wind_speed_unit  || 'km/h';
     const cond  = st.state || '';
-    const feels = a.apparent_temperature != null ? cvt(a.apparent_temperature, u) : null;
-    const hi    = a.temperature_high != null ? cvt(a.temperature_high, u) : null;
-    const lo    = a.temperature_low  != null ? cvt(a.temperature_low,  u) : null;
+    const feels = a.apparent_temperature != null ? cvtTemp(a.apparent_temperature, u, srcT) : null;
+    const hi    = a.temperature_high != null ? cvtTemp(a.temperature_high, u, srcT) : null;
+    const lo    = a.temperature_low  != null ? cvtTemp(a.temperature_low,  u, srcT) : null;
     // Use hourly for the strip; fall back to whatever we have
     const fc    = this._forecastHourly.length ? this._forecastHourly
                 : this._forecast.length       ? this._forecast
                 : (a.forecast || []);
     const now   = Date.now();
     const hourly = fc.filter(f => { const d=new Date(f.datetime)-now; return d>-3.6e6 && d<9.36e7; }).slice(0,12);
-    let ws = a.wind_speed;
-    if (ws != null) { if (wu==='mph') ws=Math.round(ws*0.621371)+''; else if (wu==='m/s') ws=(ws/3.6).toFixed(1); else ws=Math.round(ws)+''; } else ws='—';
+    const ws = cvtWind(a.wind_speed, wu, srcW) ?? '—';
 
     let h = `<div class="wx-current">
       <div class="wx-ico-sm">${wico(cond,36)}</div>
-      <div class="wx-temp">${cvtD(a.temperature,u)}<sup>${u}</sup></div>
+      <div class="wx-temp">${cvtTempD(a.temperature,u,srcT)}<sup>${u}</sup></div>
       <div class="wx-meta">
         <div class="wx-cond">${W_LABELS[cond]||cond}</div>
         ${feels!=null?`<div class="wx-hl">Feels like ${feels}${u}${(hi!=null&&lo!=null)?` · H:${hi}° L:${lo}°`:''}</div>`
@@ -1669,7 +1711,7 @@ class WormWeatherCard extends HTMLElement {
       if (a.pressure!=null) { const p=Math.round(a.pressure); h+=tile('mdi:gauge','Pressure',p,'hPa',p>1020?'↑ High':p<1000?'↓ Low':'→ Normal'); }
       if (a.uv_index!=null) h+=tile('mdi:sun-wireless','UV Index',a.uv_index,'',uvl(a.uv_index));
       if (a.visibility!=null) h+=tile('mdi:eye','Visibility',Math.round(a.visibility),'km','');
-      if (a.dew_point!=null) h+=tile('mdi:thermometer-water','Dew Point',cvt(a.dew_point,u),u,'');
+      if (a.dew_point!=null) h+=tile('mdi:thermometer-water','Dew Point',cvtTemp(a.dew_point,u,srcT),u,'');
       if (a.cloud_coverage!=null) h+=tile('mdi:cloud-percent','Cloud Cover',Math.round(a.cloud_coverage),'%','');
       if (a.precipitation!=null) h+=tile('mdi:weather-rainy','Precipitation',a.precipitation,'mm','');
       h += '</div>';
