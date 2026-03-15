@@ -995,21 +995,27 @@ ha-card {
 .tile-sub{font-size:11px;color:rgba(255,255,255,0.32);margin-top:4px;}
 
 /* Forecast tab */
-.fc-wrap{padding:4px 16px 20px;}
-.fc-cards{display:flex;gap:8px;overflow-x:auto;padding:14px 0 6px;margin-bottom:14px;scrollbar-width:none;}
-.fc-cards::-webkit-scrollbar{display:none;}
-.fc-card{
-  flex:0 0 72px;background:rgba(255,255,255,0.04);border-radius:14px;
-  padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:6px;
-  border:1px solid rgba(255,255,255,0.06);text-align:center;
+.fc-wrap{padding:0 0 20px;}
+/* Day tab strip */
+.fc-day-tabs{display:flex;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid rgba(255,255,255,0.06);padding:0 16px;}
+.fc-day-tabs::-webkit-scrollbar{display:none;}
+.fc-day-tab{
+  flex:0 0 auto;padding:12px 14px 10px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  border-bottom:2px solid transparent;transition:border-color .2s,color .2s;
+  -webkit-tap-highlight-color:transparent;user-select:none;
 }
-.fc-card.today{background:rgba(90,200,250,0.07);border-color:rgba(90,200,250,0.25);}
-.fc-day-name{font-size:10px;font-weight:700;color:rgba(255,255,255,0.42);text-transform:uppercase;letter-spacing:.4px;}
-.fc-card.today .fc-day-name{color:var(--worm-ac);}
-.fc-day-ico{--mdc-icon-size:24px;color:rgba(255,255,255,0.82);}
-.fc-day-hi{font-size:14px;font-weight:600;color:#fff;}
-.fc-day-lo{font-size:11px;color:rgba(255,255,255,0.38);}
-.fc-day-rn{font-size:9px;color:#5AC8FA;}
+.fc-day-tab:active{opacity:.6;}
+.fc-day-tab .fdt-name{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,0.38);}
+.fc-day-tab .fdt-ico{--mdc-icon-size:20px;color:rgba(255,255,255,0.55);}
+.fc-day-tab .fdt-hi{font-size:12px;font-weight:600;color:rgba(255,255,255,0.55);}
+.fc-day-tab.active .fdt-name{color:var(--worm-ac);}
+.fc-day-tab.active .fdt-ico{color:rgba(255,255,255,0.92);}
+.fc-day-tab.active .fdt-hi{color:#fff;}
+.fc-day-tab.active{border-bottom-color:var(--worm-ac);}
+/* Hourly panel */
+.fc-panel{padding:12px 16px 4px;animation:fcSlideIn .18s ease;}
+@keyframes fcSlideIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .fc-hlist{background:rgba(255,255,255,0.03);border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);}
 .fc-hrow{display:flex;align-items:center;padding:10px 14px;gap:12px;border-bottom:1px solid rgba(255,255,255,0.04);}
 .fc-hrow:last-child{border-bottom:none;}
@@ -1018,6 +1024,17 @@ ha-card {
 .fc-h-desc{font-size:12px;color:rgba(255,255,255,0.58);flex:1;}
 .fc-h-temp{font-size:14px;font-weight:600;color:#fff;flex-shrink:0;}
 .fc-h-rn{font-size:11px;color:#5AC8FA;flex-shrink:0;width:34px;text-align:right;}
+/* Daily summary row (used when no hourly data) */
+.fc-cards{display:flex;gap:8px;overflow-x:auto;padding:14px 16px 6px;scrollbar-width:none;}
+.fc-cards::-webkit-scrollbar{display:none;}
+.fc-card{flex:0 0 72px;background:rgba(255,255,255,0.04);border-radius:14px;padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:6px;border:1px solid rgba(255,255,255,0.06);text-align:center;}
+.fc-card.today{background:rgba(90,200,250,0.07);border-color:rgba(90,200,250,0.25);}
+.fc-day-name{font-size:10px;font-weight:700;color:rgba(255,255,255,0.42);text-transform:uppercase;letter-spacing:.4px;}
+.fc-card.today .fc-day-name{color:var(--worm-ac);}
+.fc-day-ico{--mdc-icon-size:24px;color:rgba(255,255,255,0.82);}
+.fc-day-hi{font-size:14px;font-weight:600;color:#fff;}
+.fc-day-lo{font-size:11px;color:rgba(255,255,255,0.38);}
+.fc-day-rn{font-size:9px;color:#5AC8FA;}
 
 /* Empty */
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:14px;padding:20px;}
@@ -1115,7 +1132,7 @@ class WormWeatherCard extends HTMLElement {
     this._expanded = false; this._curTab = 'radar';
     this._map = null; this._radar = null;
     this._frames = []; this._fi = 0;
-    this._playing = false; this._timer = null;
+    this._playing = false; this._timer = null; this._rafAnim = null;
     this._lat = 51.5; this._lon = -0.12; this._zoom = 7;
     this._ready = false;
     this._atm = null;
@@ -1146,7 +1163,9 @@ class WormWeatherCard extends HTMLElement {
   connectedCallback() { if (this._hass && !this._ready) { this._render(); this._ready = true; this._postRender(); } }
 
   disconnectedCallback() {
-    this._stopAtm(); if (this._timer) clearInterval(this._timer);
+    this._stopAtm();
+    if (this._rafAnim) { cancelAnimationFrame(this._rafAnim); this._rafAnim = null; }
+    if (this._timer) clearInterval(this._timer);
     if (this._map) { this._map.remove(); this._map = null; }
   }
 
@@ -1208,9 +1227,8 @@ class WormWeatherCard extends HTMLElement {
     if (!this._expanded) { this._initAtm(); }
     else {
       this._initMapAsync();
-      // Load forecast via modern HA API, then refresh content
       this._loadForecast().then(() => this._updateExpandedContent());
-      this._updateExpandedContent(); // show immediately with whatever is cached
+      this._updateExpandedContent();
     }
   }
 
@@ -1342,8 +1360,12 @@ class WormWeatherCard extends HTMLElement {
     if (t==='forecast') {
       const fcc = s.getElementById('fc-content');
       if (fcc) {
-        fcc.innerHTML = this._fcHTML(); // render immediately
-        this._loadForecast().then(() => { const el = s.getElementById('fc-content'); if (el) el.innerHTML = this._fcHTML(); });
+        fcc.innerHTML = this._fcHTML();
+        this._fcBindDayTabs();
+        this._loadForecast().then(() => {
+          const el = s.getElementById('fc-content');
+          if (el) { el.innerHTML = this._fcHTML(); this._fcBindDayTabs(); }
+        });
       }
     }
   }
@@ -1352,7 +1374,7 @@ class WormWeatherCard extends HTMLElement {
     const wxc = this.shadowRoot.getElementById('wx-content');
     const fcc = this.shadowRoot.getElementById('fc-content');
     if (wxc) wxc.innerHTML = this._wxHTML();
-    if (fcc) fcc.innerHTML = this._fcHTML();
+    if (fcc) { fcc.innerHTML = this._fcHTML(); this._fcBindDayTabs(); }
   }
 
   /* ── Compact overlay ── */
@@ -1388,12 +1410,11 @@ class WormWeatherCard extends HTMLElement {
     // Update canvas animation state
     if (this._atm) {
       const isNight = cond === 'clear-night' || (this._hass && this._hass.states['sun.sun']?.state === 'below_horizon');
-      const isDark  = !!(this._hass?.themes?.darkMode ?? false);
-      this._atm.update(cond || 'cloudy', isNight, isDark);
+      this._atm.update(cond || 'cloudy', isNight, this._isDarkMode());
     }
   }
 
-  /* ── Atmospheric canvas ── */
+  _stopAtm() { if (this._atm) { this._atm.stop(); } }
   _initAtm() {
     const wrap = this.shadowRoot.getElementById('cmp-wrap');
     const cv   = this.shadowRoot.getElementById('atm-canvas');
@@ -1405,14 +1426,26 @@ class WormWeatherCard extends HTMLElement {
       const st  = this._hass && eid && this._hass.states[eid];
       const cond = st ? (st.state || 'cloudy') : 'cloudy';
       const isNight = cond === 'clear-night' || (this._hass && this._hass.states['sun.sun']?.state === 'below_horizon');
-      const isDark  = !!(this._hass?.themes?.darkMode ?? false);
       if (!this._atm) this._atm = new AtmCanvas(cv);
-      this._atm.init(cond, isNight, isDark, w, h);
+      this._atm.init(cond, isNight, this._isDarkMode(), w, h);
       this._atm.start();
     });
   }
 
-  _stopAtm() { if (this._atm) { this._atm.stop(); } }
+  /* ── Resolve whether HA is in dark mode ── */
+  _isDarkMode() {
+    // hass.themes.darkMode is the authoritative flag in modern HA
+    // It can be: true, false, or undefined (no theme set → default light)
+    const dm = this._hass?.themes?.darkMode;
+    if (dm === true) return true;
+    if (dm === false) return false;
+    // Fallback: check if the body has a dark class (some older HA builds)
+    try {
+      const body = document.querySelector('home-assistant')?.shadowRoot?.querySelector('home-assistant-main')?.shadowRoot?.querySelector('ha-panel-lovelace')?.shadowRoot?.querySelector('hui-root')?.shadowRoot?.querySelector('div');
+      if (body && body.classList.contains('dark')) return true;
+    } catch (_) {}
+    return false; // default to light
+  }
 
   /* ── Map ── */
   async _initMapAsync() {
@@ -1468,17 +1501,43 @@ class WormWeatherCard extends HTMLElement {
     }
   }
 
-  _showFrame(i) {
+  _showFrame(i, instant = false) {
     if (!this._map || !window.L) return;
     const f = this._frames[i]; if (!f) return;
-    if (this._radar) { this._map.removeLayer(this._radar); this._radar = null; }
-    // Use 256px tiles (default Leaflet), colorScheme=7 (TITAN 2020 - vivid colours)
     const url = 'https://tilecache.rainviewer.com' + f.path + '/256/{z}/{x}/{y}/7/1_1.png';
-    this._radar = L.tileLayer(url, {
-      opacity: parseFloat(this._cfg.radar_opacity) || 0.7,
+    const targetOpacity = parseFloat(this._cfg.radar_opacity) || 0.7;
+
+    // Create the new layer at opacity 0
+    const newLayer = L.tileLayer(url, {
+      opacity: instant ? targetOpacity : 0,
       zIndex: 200,
       crossOrigin: 'anonymous',
     }).addTo(this._map);
+
+    const oldLayer = this._radar;
+    this._radar = newLayer;
+
+    if (instant || !oldLayer) {
+      if (oldLayer) this._map.removeLayer(oldLayer);
+    } else {
+      // Crossfade: ramp new layer up, old layer down over ~300 ms
+      const STEPS = 12, INTERVAL = 25; // 300ms total
+      let step = 0;
+      const fade = setInterval(() => {
+        step++;
+        const t = step / STEPS;
+        // ease-in-out: t*(2-t) for smooth feel
+        const eased = t * (2 - t);
+        try { newLayer.setOpacity(eased * targetOpacity); } catch (_) {}
+        try { oldLayer.setOpacity((1 - eased) * targetOpacity); } catch (_) {}
+        if (step >= STEPS) {
+          clearInterval(fade);
+          try { if (this._map) this._map.removeLayer(oldLayer); } catch (_) {}
+        }
+      }, INTERVAL);
+    }
+
+    // Update time label and progress bar
     const t = this.shadowRoot.getElementById('map-time');
     if (t) t.textContent = new Date(f.time*1000).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
     const bar = this.shadowRoot.getElementById('fpbar');
@@ -1487,13 +1546,34 @@ class WormWeatherCard extends HTMLElement {
 
   _startAnim() {
     this._stopAnim();
-    if (this._frames.length<2) return;
+    if (this._frames.length < 2) return;
     this._playing = true; this._updatePlayBtn();
-    this._timer = setInterval(() => { this._fi=(this._fi+1)%this._frames.length; this._showFrame(this._fi); }, parseInt(this._cfg.animation_speed)||600);
+    const speed = parseInt(this._cfg.animation_speed) || 600;
+    // Use RAF-based loop for smooth, jank-free animation
+    let lastTick = 0;
+    const tick = (ts) => {
+      if (!this._playing) return;
+      if (ts - lastTick >= speed) {
+        lastTick = ts;
+        this._fi = (this._fi + 1) % this._frames.length;
+        this._showFrame(this._fi);
+      }
+      this._rafAnim = requestAnimationFrame(tick);
+    };
+    this._rafAnim = requestAnimationFrame(tick);
   }
-  _stopAnim()  { if (this._timer) { clearInterval(this._timer); this._timer=null; } this._playing=false; this._updatePlayBtn(); }
+
+  _stopAnim() {
+    if (this._rafAnim) { cancelAnimationFrame(this._rafAnim); this._rafAnim = null; }
+    if (this._timer)   { clearInterval(this._timer); this._timer = null; }
+    this._playing = false; this._updatePlayBtn();
+  }
   _toggleAnim(){ this._playing ? this._stopAnim() : this._startAnim(); }
-  _step(d)     { if (!this._frames.length) return; this._fi=(this._fi+d+this._frames.length)%this._frames.length; this._showFrame(this._fi); }
+  _step(d) {
+    if (!this._frames.length) return;
+    this._fi = (this._fi + d + this._frames.length) % this._frames.length;
+    this._showFrame(this._fi, true); // instant on manual step
+  }
   _updatePlayBtn() {
     const b = this.shadowRoot.getElementById('b-play'); if (!b) return;
     b.innerHTML = this._playing ? ico('mdi:pause') : ico('mdi:play');
@@ -1571,7 +1651,7 @@ class WormWeatherCard extends HTMLElement {
     return h;
   }
 
-  /* ── Forecast HTML ── */
+  /* ── Forecast HTML — day tabs + hourly panel ── */
   _fcHTML() {
     const eid = this._cfg.weather_entity;
     if (!eid) return `<div class="empty"><ha-icon class="empty-ico" icon="mdi:calendar-weather"></ha-icon><div class="empty-txt">Select a weather entity</div></div>`;
@@ -1579,61 +1659,18 @@ class WormWeatherCard extends HTMLElement {
     if (!st) return `<div class="empty"><ha-icon class="empty-ico" icon="mdi:alert-circle"></ha-icon><div class="empty-txt">Entity not found: ${eid}</div></div>`;
     const a  = st.attributes || {};
     const u  = this._cfg.temp_unit || '°C';
-    // Use cached forecast (loaded via weather.get_forecasts) or legacy attribute
     const fc = this._forecast.length ? this._forecast : (a.forecast || []);
     if (!fc.length) return `<div class="empty"><ha-icon class="empty-ico" icon="mdi:loading"></ha-icon><div class="empty-txt">Loading forecast…</div></div>`;
 
-    // Detect forecast type based on interval between entries
+    // Detect hourly vs daily
     const isHourly = fc.length >= 2 && (new Date(fc[1].datetime) - new Date(fc[0].datetime)) < 7200000;
     const now = Date.now();
 
-    let h = '';
-
-    if (isHourly) {
-      // Hourly: show day cards (grouped) + detail rows
-      const next24 = fc.filter(f => { const d=new Date(f.datetime)-now; return d>-3600000&&d<86400000; }).slice(0,24);
-      const next7days = fc.filter(f => new Date(f.datetime) > new Date()).reduce((acc, f) => {
-        const day = new Date(f.datetime).toDateString();
-        if (!acc[day]) acc[day] = { items:[], date:f.datetime };
-        acc[day].items.push(f);
-        return acc;
-      }, {});
-
-      h += '<div class="sec-hdr">Next 7 Days</div><div class="fc-cards">';
-      const dayKeys = Object.keys(next7days).slice(0,7);
-      dayKeys.forEach((day, i) => {
-        const items = next7days[day].items;
-        const avgCond = items[Math.floor(items.length/2)]?.condition || 'cloudy';
-        const hi = Math.max(...items.map(x=>x.temperature||0));
-        const lo = Math.min(...items.map(x=>x.temperature||99));
-        const rn = items.reduce((s,x)=>s+(x.precipitation_probability||0),0)/items.length;
-        const dt = next7days[day].date;
-        h += `<div class="fc-card${i===0?' today':''}">
-          <div class="fc-day-name">${i===0?'Today':fmtD(dt)}</div>
-          <div class="fc-day-ico">${wico(avgCond,24)}</div>
-          <div class="fc-day-hi">${cvt(hi,u)}°</div>
-          <div class="fc-day-lo">${cvt(lo,u)}°</div>
-          ${rn>0?`<div class="fc-day-rn">${Math.round(rn)}%</div>`:''}
-        </div>`;
-      });
-      h += '</div>';
-
-      h += '<div class="sec-hdr">Next 24 Hours</div><div class="fc-hlist">';
-      next24.forEach((f, i) => {
-        h += `<div class="fc-hrow">
-          <div class="fc-h-time">${i===0?'Now':fmtT(f.datetime)}</div>
-          <div class="fc-h-ico">${wico(f.condition,18)}</div>
-          <div class="fc-h-desc">${W_LABELS[f.condition]||f.condition||''}</div>
-          <div class="fc-h-temp">${cvt(f.temperature,u)}°</div>
-          <div class="fc-h-rn">${f.precipitation_probability!=null?Math.round(f.precipitation_probability)+'%':''}</div>
-        </div>`;
-      });
-      h += '</div>';
-    } else {
-      // Daily forecast
-      const daily = fc.filter(f => new Date(f.datetime) > new Date()).slice(0,7);
-      h += '<div class="sec-hdr">7-Day Forecast</div><div class="fc-cards">';
-      daily.forEach((f, i) => {
+    if (!isHourly) {
+      // Daily-only integration: show simple card strip + summary rows, no tabs
+      const daily = fc.filter(f => new Date(f.datetime) >= new Date(new Date().setHours(0,0,0,0))).slice(0,7);
+      let h = '<div class="fc-cards">';
+      daily.forEach((f,i) => {
         const rn = f.precipitation_probability;
         h += `<div class="fc-card${i===0?' today':''}">
           <div class="fc-day-name">${i===0?'Today':fmtD(f.datetime)}</div>
@@ -1644,9 +1681,8 @@ class WormWeatherCard extends HTMLElement {
         </div>`;
       });
       h += '</div>';
-
-      h += '<div class="sec-hdr">Details</div><div class="fc-hlist">';
-      daily.forEach((f, i) => {
+      h += '<div style="padding:0 16px"><div class="fc-hlist">';
+      daily.forEach((f,i) => {
         h += `<div class="fc-hrow">
           <div class="fc-h-time" style="width:52px">${i===0?'Today':fmtD(f.datetime)}</div>
           <div class="fc-h-ico">${wico(f.condition,18)}</div>
@@ -1655,11 +1691,97 @@ class WormWeatherCard extends HTMLElement {
           <div class="fc-h-rn">${f.precipitation_probability!=null?Math.round(f.precipitation_probability)+'%':''}</div>
         </div>`;
       });
-      h += '</div>';
+      h += '</div></div>';
+      return h;
     }
+
+    // Hourly integration — group by calendar day
+    const byDay = {};
+    for (const f of fc) {
+      const d = new Date(f.datetime);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!byDay[key]) byDay[key] = { label: d, items: [] };
+      byDay[key].items.push(f);
+    }
+    const dayKeys = Object.keys(byDay).slice(0, 7);
+
+    // Build tab strip
+    let tabsHTML = '<div class="fc-day-tabs" id="fc-day-tabs">';
+    const today = new Date(); today.setHours(0,0,0,0);
+    dayKeys.forEach((key, i) => {
+      const day = byDay[key];
+      const dt  = new Date(day.label); dt.setHours(0,0,0,0);
+      const isToday = dt.getTime() === today.getTime();
+      const items = day.items;
+      const peakCond = items[Math.floor(items.length * 0.45)]?.condition || 'cloudy';
+      const hi = Math.max(...items.map(x => x.temperature ?? -99));
+      tabsHTML += `<div class="fc-day-tab${i===0?' active':''}" data-day="${key}">
+        <span class="fdt-name">${isToday ? 'Today' : fmtD(day.label)}</span>
+        <span class="fdt-ico">${wico(peakCond, 20)}</span>
+        <span class="fdt-hi">${cvt(hi, u)}°</span>
+      </div>`;
+    });
+    tabsHTML += '</div>';
+
+    // Build hourly panel for the first (Today) day
+    const firstKey = dayKeys[0];
+    const panelHTML = this._fcDayPanel(byDay[firstKey]?.items || [], u, firstKey === dayKeys[0]);
+
+    return tabsHTML + `<div class="fc-panel" id="fc-panel">${panelHTML}</div>`;
+  }
+
+  _fcDayPanel(items, u, isToday) {
+    if (!items.length) return '<div class="empty" style="height:120px"><div class="empty-txt">No data</div></div>';
+    const now = Date.now();
+    let h = '<div class="fc-hlist">';
+    for (const f of items) {
+      const d = new Date(f.datetime);
+      const isNow = isToday && Math.abs(d - now) < 1800000;
+      const timeStr = isNow ? 'Now' : d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+      h += `<div class="fc-hrow">
+        <div class="fc-h-time">${timeStr}</div>
+        <div class="fc-h-ico">${wico(f.condition,18)}</div>
+        <div class="fc-h-desc">${W_LABELS[f.condition]||f.condition||''}</div>
+        <div class="fc-h-temp">${cvt(f.temperature,u)}°</div>
+        <div class="fc-h-rn">${f.precipitation_probability!=null?Math.round(f.precipitation_probability)+'%':''}</div>
+      </div>`;
+    }
+    h += '</div>';
     return h;
   }
-}
+
+  _fcBindDayTabs() {
+    const s = this.shadowRoot;
+    const tabsEl  = s.getElementById('fc-day-tabs');
+    const panelEl = s.getElementById('fc-panel');
+    if (!tabsEl || !panelEl) return;
+
+    const fc = this._forecast.length ? this._forecast : (this._hass?.states?.[this._cfg.weather_entity]?.attributes?.forecast || []);
+    const u  = this._cfg.temp_unit || '°C';
+
+    // Rebuild the same byDay map
+    const byDay = {};
+    for (const f of fc) {
+      const d = new Date(f.datetime);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!byDay[key]) byDay[key] = { label: d, items: [] };
+      byDay[key].items.push(f);
+    }
+    const dayKeys = Object.keys(byDay).slice(0, 7);
+
+    tabsEl.querySelectorAll('.fc-day-tab').forEach((tab, i) => {
+      tab.addEventListener('click', () => {
+        tabsEl.querySelectorAll('.fc-day-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const key = tab.dataset.day;
+        const isFirst = key === dayKeys[0];
+        panelEl.innerHTML = this._fcDayPanel(byDay[key]?.items || [], u, isFirst);
+        // Scroll panel into view on mobile
+        panelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    });
+  }
+} // end WormWeatherCard
 
 /* ═══════════════════════ EDITOR CLASS ═══════════════════════ */
 class WormWeatherCardEditor extends HTMLElement {
