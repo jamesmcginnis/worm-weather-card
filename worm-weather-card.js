@@ -97,6 +97,8 @@ const wdir = b => b == null ? '—' : WIND_DIRS[Math.round(b / 22.5) % 16];
 const fmtT = iso => { const d = new Date(iso), h = d.getHours(); return (h % 12 || 12) + (h >= 12 ? 'pm' : 'am'); };
 const fmtD = iso => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(iso).getDay()];
 const cvt  = (v,u) => v == null ? '—' : u === '°F' ? Math.round(v * 9/5 + 32) : Math.round(v);
+// One decimal place — used for the mini card temperature
+const cvtD = (v,u) => v == null ? '—' : u === '°F' ? (v * 9/5 + 32).toFixed(1) : parseFloat(v).toFixed(1);
 const uvl  = u => !u ? '' : u <= 2 ? 'Low' : u <= 5 ? 'Moderate' : u <= 7 ? 'High' : u <= 10 ? 'Very High' : 'Extreme';
 const wico = (state, sz=24, style='') => `<ha-icon icon="${W_ICONS[state]||'mdi:weather-cloudy'}" style="--mdc-icon-size:${sz}px;display:inline-flex;align-items:center;${style}"></ha-icon>`;
 const ico  = (icon, sz=20, style='') => `<ha-icon icon="${icon}" style="--mdc-icon-size:${sz}px;display:inline-flex;align-items:center;${style}"></ha-icon>`;
@@ -887,8 +889,8 @@ ha-card {
   background:linear-gradient(to top,rgba(0,0,0,0.25) 0%,transparent 55%);
 }
 .compact-left{display:flex;flex-direction:column;gap:2px;}
-.compact-temp{font-size:54px;font-weight:200;color:#fff;line-height:1;letter-spacing:-3px;text-shadow:0 2px 12px rgba(0,0,0,0.4);}
-.compact-temp sup{font-size:20px;font-weight:300;letter-spacing:0;vertical-align:super;}
+.compact-temp{font-size:46px;font-weight:200;color:#fff;line-height:1;letter-spacing:-1px;text-shadow:0 2px 12px rgba(0,0,0,0.4);}
+.compact-temp sup{font-size:17px;font-weight:300;letter-spacing:0;vertical-align:super;}
 .compact-cond{font-size:13px;color:rgba(255,255,255,0.88);margin-top:3px;letter-spacing:.2px;text-shadow:0 1px 4px rgba(0,0,0,0.5);}
 .compact-hilo{font-size:11px;color:rgba(255,255,255,0.62);margin-top:2px;text-shadow:0 1px 3px rgba(0,0,0,0.4);}
 .compact-wind{font-size:11px;color:rgba(255,255,255,0.62);margin-top:2px;text-shadow:0 1px 3px rgba(0,0,0,0.4);display:flex;align-items:center;gap:3px;}
@@ -947,14 +949,21 @@ ha-card {
 .tab-l{font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:rgba(255,255,255,0.3);transition:color .2s;}
 .tab.on .tab-l{color:var(--worm-ac);}
 
-/* Weather content — same compact sizing as Forecast tab */
-.wx-wrap{padding:4px 16px 16px;}
-.wx-current{display:flex;align-items:center;justify-content:space-between;padding:10px 0 6px;}
-.wx-temp{font-size:58px;font-weight:200;color:#fff;line-height:1;letter-spacing:-3px;}
-.wx-temp sup{font-size:20px;font-weight:300;letter-spacing:0;vertical-align:super;}
-.wx-cond{font-size:14px;color:rgba(255,255,255,0.6);margin-top:4px;}
-.wx-hl{font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;}
-.wx-ico{--mdc-icon-size:54px;color:rgba(255,255,255,0.92);filter:drop-shadow(0 4px 16px rgba(0,0,0,.5));}
+/* Weather content — compact sizing matching Forecast tab */
+.wx-wrap{padding:0 0 16px;}
+.wx-current{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 16px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+  margin-bottom:0;
+}
+.wx-ico-sm{--mdc-icon-size:36px;color:rgba(255,255,255,0.88);flex-shrink:0;}
+.wx-temp{font-size:36px;font-weight:300;color:#fff;line-height:1;letter-spacing:-1px;flex-shrink:0;}
+.wx-temp sup{font-size:14px;font-weight:400;letter-spacing:0;vertical-align:super;}
+.wx-meta{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;}
+.wx-cond{font-size:13px;color:rgba(255,255,255,0.65);}
+.wx-hl{font-size:11px;color:rgba(255,255,255,0.38);}
+.wx-pad{padding:10px 16px 0;}
 .feels-chip{
   display:inline-flex;align-items:center;gap:6px;
   background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.07);
@@ -986,13 +995,13 @@ ha-card {
 .dhi{font-size:13px;font-weight:600;color:#fff;}
 .dlo{font-size:13px;color:rgba(255,255,255,0.35);}
 .tgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
-.tile{background:rgba(255,255,255,0.03);border-radius:14px;padding:14px;border:1px solid rgba(255,255,255,0.06);}
-.tile-hdr{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
-.tile-ico{--mdc-icon-size:14px;color:rgba(255,255,255,0.38);}
+.tile{background:rgba(255,255,255,0.03);border-radius:12px;padding:10px 12px;border:1px solid rgba(255,255,255,0.06);}
+.tile-hdr{display:flex;align-items:center;gap:5px;margin-bottom:5px;}
+.tile-ico{--mdc-icon-size:13px;color:rgba(255,255,255,0.38);}
 .tile-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,0.32);}
-.tile-val{font-size:28px;font-weight:200;color:#fff;line-height:1;}
-.tile-unit{font-size:12px;color:rgba(255,255,255,0.5);}
-.tile-sub{font-size:11px;color:rgba(255,255,255,0.32);margin-top:4px;}
+.tile-val{font-size:22px;font-weight:300;color:#fff;line-height:1;}
+.tile-unit{font-size:11px;color:rgba(255,255,255,0.5);}
+.tile-sub{font-size:10px;color:rgba(255,255,255,0.32);margin-top:3px;}
 
 /* Forecast tab */
 .fc-wrap{padding:0 0 20px;}
@@ -1136,7 +1145,9 @@ class WormWeatherCard extends HTMLElement {
     this._lat = 51.5; this._lon = -0.12; this._zoom = 7;
     this._ready = false;
     this._atm = null;
-    this._forecast = [];  // cached from get_forecasts service
+    this._forecast = [];       // legacy / daily fallback
+    this._forecastHourly = []; // hourly data for Forecast tab
+    this._forecastDaily  = []; // daily summaries for tab headers
   }
 
   setConfig(c) {
@@ -1232,29 +1243,50 @@ class WormWeatherCard extends HTMLElement {
     }
   }
 
-  /* ── Modern HA forecast fetcher (HA 2023.9+ weather.get_forecasts) ── */
+  /* ── Forecast fetcher — always tries both hourly and daily ── */
   async _loadForecast() {
     const eid = this._cfg.weather_entity;
     if (!eid || !this._hass) return;
-    // 1. Try legacy attribute first (still present on some integrations)
-    const st = this._hass.states[eid];
-    if (st?.attributes?.forecast?.length) {
-      this._forecast = st.attributes.forecast;
-      return;
-    }
-    // 2. Use weather.get_forecasts service (HA 2023.9+)
-    for (const type of ['daily', 'hourly', 'twice_daily']) {
+
+    const fetchType = async (type) => {
       try {
         const res = await this._hass.connection.sendMessagePromise({
-          type: 'call_service',
-          domain: 'weather',
-          service: 'get_forecasts',
+          type: 'call_service', domain: 'weather', service: 'get_forecasts',
           service_data: { entity_id: eid, type },
           return_response: true,
         });
-        const fc = res?.response?.[eid]?.forecast;
-        if (fc?.length) { this._forecast = fc; return; }
-      } catch (_) {}
+        return res?.response?.[eid]?.forecast || [];
+      } catch (_) { return []; }
+    };
+
+    // Fetch hourly and daily simultaneously
+    const [hourly, daily] = await Promise.all([
+      fetchType('hourly'),
+      fetchType('daily'),
+    ]);
+
+    // Also try twice_daily if neither worked
+    if (!hourly.length && !daily.length) {
+      const td = await fetchType('twice_daily');
+      this._forecastHourly = td;
+      this._forecastDaily  = td;
+      this._forecast = td;
+      return;
+    }
+
+    this._forecastHourly = hourly;
+    this._forecastDaily  = daily;
+
+    // Legacy _forecast: prefer hourly for the hourly strip in the Weather tab,
+    // fall back to daily if no hourly available
+    this._forecast = hourly.length ? hourly : daily;
+
+    // Also check legacy attribute as last resort
+    if (!this._forecast.length) {
+      const st = this._hass.states[eid];
+      this._forecast = st?.attributes?.forecast || [];
+      this._forecastHourly = this._forecast;
+      this._forecastDaily  = this._forecast;
     }
   }
 
@@ -1387,7 +1419,7 @@ class WormWeatherCard extends HTMLElement {
     const cond = st ? (st.state || '') : '';
     const u    = this._cfg.temp_unit || '°C';
     const wu   = this._cfg.wind_unit || 'km/h';
-    s.getElementById('cmp-temp').innerHTML = `${cvt(a.temperature, u)}<sup>${u}</sup>`;
+    s.getElementById('cmp-temp').innerHTML = `${cvtD(a.temperature, u)}<sup>${u}</sup>`;
     s.getElementById('cmp-cond').textContent = W_LABELS[cond] || cond || '—';
     const hi = a.temperature_high != null ? cvt(a.temperature_high, u) : null;
     const lo = a.temperature_low  != null ? cvt(a.temperature_low,  u) : null;
@@ -1594,23 +1626,27 @@ class WormWeatherCard extends HTMLElement {
     const u  = this._cfg.temp_unit || '°C';
     const wu = this._cfg.wind_unit || 'km/h';
     const cond  = st.state || '';
-    const temp  = cvt(a.temperature, u);
     const feels = a.apparent_temperature != null ? cvt(a.apparent_temperature, u) : null;
     const hi    = a.temperature_high != null ? cvt(a.temperature_high, u) : null;
     const lo    = a.temperature_low  != null ? cvt(a.temperature_low,  u) : null;
-    const fc    = this._forecast.length ? this._forecast : (a.forecast || []);
+    // Use hourly for the strip; fall back to whatever we have
+    const fc    = this._forecastHourly.length ? this._forecastHourly
+                : this._forecast.length       ? this._forecast
+                : (a.forecast || []);
     const now   = Date.now();
     const hourly = fc.filter(f => { const d=new Date(f.datetime)-now; return d>-3.6e6 && d<9.36e7; }).slice(0,12);
     let ws = a.wind_speed;
     if (ws != null) { if (wu==='mph') ws=Math.round(ws*0.621371)+''; else if (wu==='m/s') ws=(ws/3.6).toFixed(1); else ws=Math.round(ws)+''; } else ws='—';
 
-    let h = `<div class="wx-current"><div>
-      <div class="wx-temp">${temp}<sup>${u}</sup></div>
-      <div class="wx-cond">${W_LABELS[cond]||cond}</div>
-      ${hi!=null&&lo!=null ? `<div class="wx-hl">H: ${hi}° · L: ${lo}°</div>` : ''}
-      </div><div class="wx-ico">${wico(cond,66)}</div></div>`;
-
-    if (feels != null) h += `<div class="feels-chip"><span class="fl">Feels like</span><span class="fv">${feels}${u}</span></div>`;
+    let h = `<div class="wx-current">
+      <div class="wx-ico-sm">${wico(cond,36)}</div>
+      <div class="wx-temp">${cvtD(a.temperature,u)}<sup>${u}</sup></div>
+      <div class="wx-meta">
+        <div class="wx-cond">${W_LABELS[cond]||cond}</div>
+        ${feels!=null?`<div class="wx-hl">Feels like ${feels}${u}${(hi!=null&&lo!=null)?` · H:${hi}° L:${lo}°`:''}</div>`
+          :(hi!=null&&lo!=null?`<div class="wx-hl">H: ${hi}° · L: ${lo}°</div>`:'') }
+      </div>
+    </div><div class="wx-pad">`;
 
     if (this._cfg.show_hourly !== false && hourly.length) {
       h += '<div class="sec-hdr">Hourly</div><div class="hrow">';
@@ -1638,103 +1674,105 @@ class WormWeatherCard extends HTMLElement {
       if (a.precipitation!=null) h+=tile('mdi:weather-rainy','Precipitation',a.precipitation,'mm','');
       h += '</div>';
     }
+    h += '</div>'; // close wx-pad
     return h;
   }
-
-  /* ── Forecast HTML — day tabs + hourly panel ── */
   _fcHTML() {
     const eid = this._cfg.weather_entity;
     if (!eid) return `<div class="empty"><ha-icon class="empty-ico" icon="mdi:calendar-weather"></ha-icon><div class="empty-txt">Select a weather entity</div></div>`;
     const st = this._hass?.states?.[eid];
     if (!st) return `<div class="empty"><ha-icon class="empty-ico" icon="mdi:alert-circle"></ha-icon><div class="empty-txt">Entity not found: ${eid}</div></div>`;
-    const a  = st.attributes || {};
-    const u  = this._cfg.temp_unit || '°C';
-    const fc = this._forecast.length ? this._forecast : (a.forecast || []);
-    if (!fc.length) return `<div class="empty"><ha-icon class="empty-ico" icon="mdi:loading"></ha-icon><div class="empty-txt">Loading forecast…</div></div>`;
+    const u = this._cfg.temp_unit || '°C';
 
-    // Detect hourly vs daily
-    const isHourly = fc.length >= 2 && (new Date(fc[1].datetime) - new Date(fc[0].datetime)) < 7200000;
-    const now = Date.now();
+    const hourlyFc = this._forecastHourly;
+    const dailyFc  = this._forecastDaily.length ? this._forecastDaily
+                   : (st.attributes?.forecast || []);
 
-    if (!isHourly) {
-      // Daily-only integration: show simple card strip + summary rows, no tabs
-      const daily = fc.filter(f => new Date(f.datetime) >= new Date(new Date().setHours(0,0,0,0))).slice(0,7);
-      let h = '<div class="fc-cards">';
-      daily.forEach((f,i) => {
-        const rn = f.precipitation_probability;
-        h += `<div class="fc-card${i===0?' today':''}">
-          <div class="fc-day-name">${i===0?'Today':fmtD(f.datetime)}</div>
-          <div class="fc-day-ico">${wico(f.condition,24)}</div>
-          <div class="fc-day-hi">${cvt(f.temperature,u)}°</div>
-          <div class="fc-day-lo">${f.templow!=null?cvt(f.templow,u)+'°':'—'}</div>
-          ${rn!=null?`<div class="fc-day-rn">${Math.round(rn)}%</div>`:''}
-        </div>`;
-      });
-      h += '</div>';
-      h += '<div style="padding:0 16px"><div class="fc-hlist">';
-      daily.forEach((f,i) => {
-        h += `<div class="fc-hrow">
-          <div class="fc-h-time" style="width:52px">${i===0?'Today':fmtD(f.datetime)}</div>
-          <div class="fc-h-ico">${wico(f.condition,18)}</div>
-          <div class="fc-h-desc">${W_LABELS[f.condition]||f.condition||''}</div>
-          <div class="fc-h-temp">${cvt(f.temperature,u)}°${f.templow!=null?' / '+cvt(f.templow,u)+'°':''}</div>
-          <div class="fc-h-rn">${f.precipitation_probability!=null?Math.round(f.precipitation_probability)+'%':''}</div>
-        </div>`;
-      });
-      h += '</div></div>';
-      return h;
+    if (!hourlyFc.length && !dailyFc.length) {
+      return `<div class="empty"><ha-icon class="empty-ico" icon="mdi:loading"></ha-icon><div class="empty-txt">Loading forecast\u2026</div></div>`;
     }
 
-    // Hourly integration — group by calendar day
-    const byDay = {};
-    for (const f of fc) {
+    const byDayDaily = {};
+    for (const f of dailyFc) {
       const d = new Date(f.datetime);
       const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-      if (!byDay[key]) byDay[key] = { label: d, items: [] };
-      byDay[key].items.push(f);
+      if (!byDayDaily[key]) byDayDaily[key] = f;
     }
-    const dayKeys = Object.keys(byDay).slice(0, 7);
 
-    // Build tab strip
+    const byDayHourly = {};
+    for (const f of hourlyFc) {
+      const d = new Date(f.datetime);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!byDayHourly[key]) byDayHourly[key] = { label: d, items: [] };
+      byDayHourly[key].items.push(f);
+    }
+
+    const allKeys = new Set([...Object.keys(byDayHourly), ...Object.keys(byDayDaily)]);
+    const sortedKeys = Array.from(allKeys).sort().slice(0, 7);
+
+    if (!sortedKeys.length) {
+      return `<div class="empty"><ha-icon class="empty-ico" icon="mdi:calendar-blank"></ha-icon><div class="empty-txt">No forecast data</div></div>`;
+    }
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     let tabsHTML = '<div class="fc-day-tabs" id="fc-day-tabs">';
-    const today = new Date(); today.setHours(0,0,0,0);
-    dayKeys.forEach((key, i) => {
-      const day = byDay[key];
-      const dt  = new Date(day.label); dt.setHours(0,0,0,0);
+    sortedKeys.forEach((key, i) => {
+      const dailySummary = byDayDaily[key];
+      const hourlyDay    = byDayHourly[key];
+      const labelDate    = hourlyDay?.label || (dailySummary ? new Date(dailySummary.datetime) : new Date(key));
+      const dt = new Date(labelDate); dt.setHours(0, 0, 0, 0);
       const isToday = dt.getTime() === today.getTime();
-      const items = day.items;
-      const peakCond = items[Math.floor(items.length * 0.45)]?.condition || 'cloudy';
-      const hi = Math.max(...items.map(x => x.temperature ?? -99));
-      tabsHTML += `<div class="fc-day-tab${i===0?' active':''}" data-day="${key}">
-        <span class="fdt-name">${isToday ? 'Today' : fmtD(day.label)}</span>
+      let peakCond = dailySummary?.condition;
+      if (!peakCond && hourlyDay) peakCond = hourlyDay.items[Math.floor(hourlyDay.items.length * 0.45)]?.condition;
+      peakCond = peakCond || 'cloudy';
+      let hi = dailySummary?.temperature;
+      if (hi == null && hourlyDay) hi = Math.max(...hourlyDay.items.map(x => x.temperature ?? -99));
+      tabsHTML += `<div class="fc-day-tab${i === 0 ? ' active' : ''}" data-day="${key}">
+        <span class="fdt-name">${isToday ? 'Today' : fmtD(labelDate)}</span>
         <span class="fdt-ico">${wico(peakCond, 20)}</span>
-        <span class="fdt-hi">${cvt(hi, u)}°</span>
+        ${hi != null ? `<span class="fdt-hi">${cvt(hi, u)}°</span>` : ''}
       </div>`;
     });
     tabsHTML += '</div>';
 
-    // Build hourly panel for the first (Today) day
-    const firstKey = dayKeys[0];
-    const panelHTML = this._fcDayPanel(byDay[firstKey]?.items || [], u, firstKey === dayKeys[0]);
-
-    return tabsHTML + `<div class="fc-panel" id="fc-panel">${panelHTML}</div>`;
+    const firstKey   = sortedKeys[0];
+    const firstPanel = this._fcDayPanel(
+      byDayHourly[firstKey]?.items || [],
+      byDayDaily[firstKey] || null,
+      u, true
+    );
+    return tabsHTML + `<div class="fc-panel" id="fc-panel">${firstPanel}</div>`;
   }
 
-  _fcDayPanel(items, u, isToday) {
-    if (!items.length) return '<div class="empty" style="height:120px"><div class="empty-txt">No data</div></div>';
-    const now = Date.now();
+  _fcDayPanel(hourlyItems, dailySummary, u, isToday) {
     let h = '<div class="fc-hlist">';
-    for (const f of items) {
-      const d = new Date(f.datetime);
-      const isNow = isToday && Math.abs(d - now) < 1800000;
-      const timeStr = isNow ? 'Now' : d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    const now = Date.now();
+    if (hourlyItems.length > 1) {
+      for (const f of hourlyItems) {
+        const d = new Date(f.datetime);
+        const isNow = isToday && Math.abs(d - now) < 1800000;
+        const timeStr = isNow ? 'Now' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const rn = f.precipitation_probability;
+        h += `<div class="fc-hrow">
+          <div class="fc-h-time">${timeStr}</div>
+          <div class="fc-h-ico">${wico(f.condition, 18)}</div>
+          <div class="fc-h-desc">${W_LABELS[f.condition] || f.condition || ''}</div>
+          <div class="fc-h-temp">${cvt(f.temperature, u)}°</div>
+          <div class="fc-h-rn">${rn != null ? Math.round(rn) + '%' : ''}</div>
+        </div>`;
+      }
+    } else if (dailySummary) {
+      const rn = dailySummary.precipitation_probability;
+      const lo = dailySummary.templow;
       h += `<div class="fc-hrow">
-        <div class="fc-h-time">${timeStr}</div>
-        <div class="fc-h-ico">${wico(f.condition,18)}</div>
-        <div class="fc-h-desc">${W_LABELS[f.condition]||f.condition||''}</div>
-        <div class="fc-h-temp">${cvt(f.temperature,u)}°</div>
-        <div class="fc-h-rn">${f.precipitation_probability!=null?Math.round(f.precipitation_probability)+'%':''}</div>
+        <div class="fc-h-time" style="width:56px;color:var(--worm-ac)">All day</div>
+        <div class="fc-h-ico">${wico(dailySummary.condition, 18)}</div>
+        <div class="fc-h-desc">${W_LABELS[dailySummary.condition] || dailySummary.condition || ''}</div>
+        <div class="fc-h-temp">${cvt(dailySummary.temperature, u)}°${lo != null ? ' / ' + cvt(lo, u) + '°' : ''}</div>
+        <div class="fc-h-rn">${rn != null ? Math.round(rn) + '%' : ''}</div>
       </div>`;
+    } else {
+      h += '<div class="empty" style="height:80px"><div class="empty-txt">No data for this day</div></div>';
     }
     h += '</div>';
     return h;
@@ -1745,28 +1783,36 @@ class WormWeatherCard extends HTMLElement {
     const tabsEl  = s.getElementById('fc-day-tabs');
     const panelEl = s.getElementById('fc-panel');
     if (!tabsEl || !panelEl) return;
-
-    const fc = this._forecast.length ? this._forecast : (this._hass?.states?.[this._cfg.weather_entity]?.attributes?.forecast || []);
-    const u  = this._cfg.temp_unit || '°C';
-
-    // Rebuild the same byDay map
-    const byDay = {};
-    for (const f of fc) {
+    const u = this._cfg.temp_unit || '°C';
+    const hourlyFc = this._forecastHourly;
+    const dailyFc  = this._forecastDaily.length ? this._forecastDaily
+                   : (this._hass?.states?.[this._cfg.weather_entity]?.attributes?.forecast || []);
+    const byDayHourly = {};
+    for (const f of hourlyFc) {
       const d = new Date(f.datetime);
       const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-      if (!byDay[key]) byDay[key] = { label: d, items: [] };
-      byDay[key].items.push(f);
+      if (!byDayHourly[key]) byDayHourly[key] = { items: [] };
+      byDayHourly[key].items.push(f);
     }
-    const dayKeys = Object.keys(byDay).slice(0, 7);
-
-    tabsEl.querySelectorAll('.fc-day-tab').forEach((tab, i) => {
+    const byDayDaily = {};
+    for (const f of dailyFc) {
+      const d = new Date(f.datetime);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!byDayDaily[key]) byDayDaily[key] = f;
+    }
+    const allKeys = new Set([...Object.keys(byDayHourly), ...Object.keys(byDayDaily)]);
+    const sortedKeys = Array.from(allKeys).sort().slice(0, 7);
+    tabsEl.querySelectorAll('.fc-day-tab').forEach(tab => {
       tab.addEventListener('click', () => {
         tabsEl.querySelectorAll('.fc-day-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
-        const key = tab.dataset.day;
-        const isFirst = key === dayKeys[0];
-        panelEl.innerHTML = this._fcDayPanel(byDay[key]?.items || [], u, isFirst);
-        // Scroll panel into view on mobile
+        const key     = tab.dataset.day;
+        const isFirst = key === sortedKeys[0];
+        panelEl.innerHTML = this._fcDayPanel(
+          byDayHourly[key]?.items || [],
+          byDayDaily[key] || null,
+          u, isFirst
+        );
         panelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
     });
