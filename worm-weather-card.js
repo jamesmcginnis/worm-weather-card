@@ -1438,7 +1438,6 @@ class WormWeatherCard extends HTMLElement {
 
   setConfig(c) {
     if (!c) throw new Error('worm-weather-card: missing config');
-    const prev = this._cfg;
     this._cfg = Object.assign({
       accent_color:'#5AC8FA', default_view:'compact', map_style:'standard',
       zoom_level:7, radar_opacity:0.7, animation_speed:600,
@@ -1452,10 +1451,8 @@ class WormWeatherCard extends HTMLElement {
     if (this._ready) {
       this._stopAtm();
       this._stopAnim();
-      // _render() always rebuilds the shadow DOM so the old map container is gone.
-      // Detach Leaflet cleanly but preserve the frame buffer so we don't re-fetch.
       if (this._map) { this._map.remove(); this._map = null; }
-      // Keep this._frames, this._fi, this._forecastHourly, this._forecastDaily intact
+      this._frames = []; this._fi = 0; this._radar = null;
       this._render();
       this._postRender();
     }
@@ -1538,12 +1535,7 @@ class WormWeatherCard extends HTMLElement {
     } else {
       const dv = this._cfg.default_view || 'radar';
       if (dv !== 'weather' && dv !== 'forecast') {
-        if (!this._map) {
-          this._initMapAsync();
-        } else {
-          setTimeout(() => this._map.invalidateSize(), 80);
-          if (this._frames.length && !this._playing) this._startAnim();
-        }
+        this._initMapAsync();
       }
       this._loadForecast().then(() => this._updateExpandedContent());
       this._updateExpandedContent();
@@ -1670,13 +1662,8 @@ class WormWeatherCard extends HTMLElement {
     $('v-expanded').classList.toggle('active', this._expanded);
     if (this._expanded) {
       this._stopAtm();
-      if (!this._map) {
-        this._initMapAsync();
-      } else {
-        setTimeout(() => this._map.invalidateSize(), 80);
-        // Map already exists — restart animation if frames are loaded
-        if (this._frames.length && !this._playing) this._startAnim();
-      }
+      if (!this._map) this._initMapAsync();
+      else setTimeout(() => this._map.invalidateSize(), 80);
       this._loadForecast().then(() => this._updateExpandedContent());
       this._updateExpandedContent();
     } else {
@@ -1693,15 +1680,8 @@ class WormWeatherCard extends HTMLElement {
       s.getElementById('t-'+n)?.classList.toggle('on', n===t);
     });
     if (t==='radar') {
-      if (!this._map) {
-        this._initMapAsync();
-      } else {
-        setTimeout(() => this._map.invalidateSize(), 80);
-        // Restart animation if it was stopped when leaving radar tab
-        if (this._frames.length && !this._playing && this._cfg.auto_animate !== false) {
-          this._startAnim();
-        }
-      }
+      if (!this._map) this._initMapAsync();
+      else setTimeout(() => this._map.invalidateSize(), 80);
     }
     if (t==='weather') { const wxc = s.getElementById('wx-content'); if (wxc) wxc.innerHTML = this._wxHTML(); }
     if (t==='forecast') {
@@ -1819,6 +1799,7 @@ class WormWeatherCard extends HTMLElement {
     const el = this.shadowRoot.getElementById('lf-map');
     if (!el || !window.L) return;
     if (this._map) { this._map.remove(); this._map = null; }
+    this._frames = []; this._fi = 0; this._radar = null;
     const style = this._cfg.map_style || 'standard';
     const tl    = TILES[style] || TILES.standard;
     this._map = L.map(el, { zoomControl:false, attributionControl:false })
@@ -1830,17 +1811,7 @@ class WormWeatherCard extends HTMLElement {
       crossOrigin: true
     }).addTo(this._map);
     setTimeout(() => { if (this._map) this._map.invalidateSize(); }, 150);
-
-    // Reuse cached frames if available — avoids a network round-trip on every editor change.
-    // Only fetch fresh data on the very first load or after a long gap.
-    if (this._frames.length) {
-      this._radar = null; // old layer reference is stale after map rebuild
-      this._showFrame(this._fi, true); // repaint current frame immediately
-      if (this._cfg.auto_animate !== false) this._startAnim();
-    } else {
-      this._fetchRadar();
-    }
-
+    this._fetchRadar();
     if (this._cfg.postcode) this._geocode();
   }
 
