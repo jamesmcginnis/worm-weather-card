@@ -458,11 +458,14 @@ class AtmCanvas {
     if (this._isNight) this._dMoon(ctx,w,h); else this._dSun(ctx,w,h);
     // Mid layers
     this._dWindVapor(ctx,w,h);
-    if (this._clouds.length)  this._dClouds(ctx,w,h);
+    // Background + mid clouds (layers 1-2) drawn first — UFO flies in front of these
+    if (this._clouds.length)  this._dClouds(ctx,w,h, 1, 2);
     if (this._fog.length)     this._dFog(ctx,w,h);
     if (!this._isNight)       this._dBirds(ctx,w,h);
     this._dPlanes(ctx,w,h);
     this._dUFO(ctx,w,h);
+    // Foreground clouds (layer 3) drawn on top — UFO passes behind these
+    if (this._clouds.length)  this._dClouds(ctx,w,h, 3, 3);
     if (this._dustMotes.length&&!this._isNight) this._dDustMotes(ctx,w,h);
     if (!this._isNight&&(c==='sunny'||c==='exceptional')) this._dHeatShimmer(ctx,w,h);
     // Foreground precipitation
@@ -479,25 +482,60 @@ class AtmCanvas {
     const [sr,sg,sb]=skyMap[c]||skyMap.default||[28,58,118];
     const g=ctx.createLinearGradient(0,0,0,h);
     if (useLight) {
-      g.addColorStop(0,  `rgb(${Math.max(0,sr-18)},${Math.max(0,sg-18)},${Math.max(0,sb-14)})`);
-      g.addColorStop(.5, `rgb(${sr},${sg},${sb})`);
-      g.addColorStop(.85,`rgb(${Math.min(255,sr+42)},${Math.min(255,sg+44)},${Math.min(255,sb+26)})`);
-      g.addColorStop(1,  `rgb(${Math.min(255,sr+72)},${Math.min(255,sg+70)},${Math.min(255,sb+38)})`);
+      // Extra stops for smoother light-sky transition
+      g.addColorStop(0,   `rgb(${Math.max(0,sr-22)},${Math.max(0,sg-22)},${Math.max(0,sb-16)})`);
+      g.addColorStop(.18, `rgb(${Math.max(0,sr-12)},${Math.max(0,sg-12)},${Math.max(0,sb-8)})`);
+      g.addColorStop(.40, `rgb(${sr},${sg},${sb})`);
+      g.addColorStop(.62, `rgb(${Math.min(255,sr+20)},${Math.min(255,sg+22)},${Math.min(255,sb+12)})`);
+      g.addColorStop(.82, `rgb(${Math.min(255,sr+42)},${Math.min(255,sg+44)},${Math.min(255,sb+26)})`);
+      g.addColorStop(1,   `rgb(${Math.min(255,sr+72)},${Math.min(255,sg+70)},${Math.min(255,sb+38)})`);
     } else if (n) {
-      g.addColorStop(0, `rgb(${Math.max(0,sr-3)},${Math.max(0,sg-3)},${Math.max(0,sb-3)})`);
-      g.addColorStop(.65,`rgb(${sr},${sg},${sb})`);
-      g.addColorStop(1,  `rgb(${Math.min(255,sr+6)},${Math.min(255,sg+6)},${Math.min(255,sb+6)})`);
+      g.addColorStop(0,   `rgb(${Math.max(0,sr-4)},${Math.max(0,sg-4)},${Math.max(0,sb-4)})`);
+      g.addColorStop(.30, `rgb(${Math.max(0,sr-2)},${Math.max(0,sg-2)},${Math.max(0,sb-2)})`);
+      g.addColorStop(.65, `rgb(${sr},${sg},${sb})`);
+      g.addColorStop(.85, `rgb(${Math.min(255,sr+3)},${Math.min(255,sg+3)},${Math.min(255,sb+3)})`);
+      g.addColorStop(1,   `rgb(${Math.min(255,sr+6)},${Math.min(255,sg+6)},${Math.min(255,sb+6)})`);
     } else {
-      g.addColorStop(0, `rgb(${Math.max(0,sr-22)},${Math.max(0,sg-22)},${Math.max(0,sb-20)})`);
-      g.addColorStop(.55,`rgb(${sr},${sg},${sb})`);
-      g.addColorStop(1,  `rgb(${Math.min(255,sr+10)},${Math.min(255,sg+12)},${Math.min(255,sb+16)})`);
+      g.addColorStop(0,   `rgb(${Math.max(0,sr-22)},${Math.max(0,sg-22)},${Math.max(0,sb-20)})`);
+      g.addColorStop(.25, `rgb(${Math.max(0,sr-12)},${Math.max(0,sg-12)},${Math.max(0,sb-11)})`);
+      g.addColorStop(.55, `rgb(${sr},${sg},${sb})`);
+      g.addColorStop(.78, `rgb(${Math.min(255,sr+5)},${Math.min(255,sg+6)},${Math.min(255,sb+8)})`);
+      g.addColorStop(1,   `rgb(${Math.min(255,sr+10)},${Math.min(255,sg+12)},${Math.min(255,sb+16)})`);
     }
     ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+
+    // Warm horizon haze on light clear/fair days
     if (useLight&&(c==='sunny'||c==='partlycloudy'||c==='exceptional'||c==='windy'||c==='windy-variant')) {
       const hz=ctx.createLinearGradient(0,h*.60,0,h);
       hz.addColorStop(0,'rgba(255,230,180,0)'); hz.addColorStop(1,'rgba(255,215,148,0.13)');
       ctx.fillStyle=hz; ctx.fillRect(0,0,w,h);
     }
+
+    // Film-grain noise overlay — breaks up gradient banding
+    // Uses a seeded pattern that changes slowly so it's not distracting
+    const grainOp = useLight ? 0.028 : (n ? 0.018 : 0.022);
+    this._dGrain(ctx, w, h, grainOp);
+  }
+
+  /* ── Film grain — eliminates canvas gradient banding ────────── */
+  _dGrain(ctx, w, h, opacity) {
+    // Draw a sparse scatter of tiny semi-transparent pixels
+    // Using a fast pseudo-random walk rather than ImageData for performance
+    const count = Math.floor(w * h * 0.08); // ~8% pixel coverage
+    const seed  = (this._frame * 1.618 + 137) | 0; // slowly drifting seed
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    // Alternate between light and dark grain for true dithering
+    for (let i = 0; i < count; i++) {
+      // LCG fast random inline
+      const r = (seed * 1664525 + (i * 22695477 + 1013904223)) >>> 0;
+      const x = (r >>> 17) % w;
+      const y = (r >>> 5)  % h;
+      const bright = (r & 1) ? 255 : 0;
+      ctx.fillStyle = `rgba(${bright},${bright},${bright},1)`;
+      ctx.fillRect(x, y, 1, 1);
+    }
+    ctx.restore();
   }
 
   /* ── Aurora borealis ─────────────────────────────────────────── */
@@ -701,15 +739,15 @@ class AtmCanvas {
   }
 
   /* ── Clouds ──────────────────────────────────────────────────── */
-  _dClouds(ctx, w, h) {
+  _dClouds(ctx, w, h, minLayer = 1, maxLayer = 3) {
     const pal  = this._pal();
     const wind = .06 + Math.sin(this._gustPh)*.06;
     const PI2  = Math.PI*2;
 
-    // Sort by layer so bg renders first (painter's algorithm)
     const sorted = [...this._clouds].sort((a,b) => a.layer - b.layer);
 
     for (const cl of sorted) {
+      if (cl.layer < minLayer || cl.layer > maxLayer) continue;
       // Parallax: bg clouds drift slower
       cl.x += cl.speed * wind * (1 + cl.layer * .20);
       if (cl.x > w + 200) cl.x = -200;
@@ -869,28 +907,31 @@ class AtmCanvas {
   _spawnUFO(w, h) {
     const goRight = Math.random() > .5;
     const dir = goRight ? 1 : -1;
-    // UFO enters fast, slows to hover in centre, waves, then zooms out
+    const startX = goRight ? -90 : w + 90;
+    const hoverX = w * (.30 + Math.random() * .40);
+    const hoverY = h * (.10 + Math.random() * .28);
     this._ufos.push({
-      x: goRight ? -80 : w + 80,
-      y: h * (.12 + Math.random() * .28),
+      x: startX,
+      y: hoverY,
+      startX,
+      hoverX,
+      hoverY,
       dir,
-      phase: 'enter',    // enter → hover → exit
-      hoverX: w * (.35 + Math.random() * .30),
-      hoverFrames: 90 + Math.floor(Math.random() * 60),  // ~3-5s of hovering
+      phase: 'enter',
+      enterProgress: 0,   // 0→1 smooth lerp for entry
+      hoverFrames: 100 + Math.floor(Math.random() * 80),
       hoverTimer: 0,
-      vx: dir * (2.2 + Math.random() * 1.2),
-      vy: 0,
+      vx: 0, vy: 0,       // only used during exit
       bobPh: Math.random() * Math.PI * 2,
       lightPh: 0,
       armPh: 0,
-      armOut: 0,       // 0=arm in, 1=arm waving
+      armOut: 0,
       scale: 0.55 + Math.random() * .30,
       beamOp: 0,
     });
   }
 
   _dUFO(ctx, w, h) {
-    // Rare: ~once every 8-12 minutes on average, any condition
     this._ufoTimer++;
     if (this._ufos.length === 0 && this._ufoTimer > 480 && Math.random() < .0015) {
       this._ufoTimer = 0;
@@ -902,35 +943,42 @@ class AtmCanvas {
 
     for (let i = this._ufos.length - 1; i >= 0; i--) {
       const u = this._ufos[i];
-      u.lightPh += .10;
-      u.bobPh   += .032;
+      u.lightPh += .08;
+      u.bobPh   += .025;
 
       if (u.phase === 'enter') {
-        u.x += u.vx;
-        // Decelerate as it approaches hoverX
-        const dist = Math.abs(u.hoverX - u.x);
-        if (dist < 60) u.vx *= .82;
-        if (Math.abs(u.vx) < .4) { u.phase = 'hover'; u.vx = 0; }
+        // Smooth ease-out: cubic easing so entry starts fast and settles gently
+        u.enterProgress += 0.018;
+        if (u.enterProgress >= 1) {
+          u.enterProgress = 1;
+          u.phase = 'hover';
+        }
+        const t = u.enterProgress;
+        const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+        u.x = u.startX + (u.hoverX - u.startX) * eased;
+        u.y = u.hoverY;
+
       } else if (u.phase === 'hover') {
-        // Bob gently
-        u.x = u.hoverX + Math.sin(u.bobPh * .5) * 4;
-        u.y += Math.sin(u.bobPh) * .3;
+        // Gentle bob in place
+        u.x = u.hoverX + Math.sin(u.bobPh * .4) * 3.5;
+        u.y = u.hoverY + Math.sin(u.bobPh) * 2.2;
         u.hoverTimer++;
-        u.beamOp = Math.min(.45, u.beamOp + .02);
-        // Arm wave animation
-        u.armPh += .08;
-        u.armOut = Math.max(0, Math.sin(u.armPh * .4));
+        u.beamOp = Math.min(.42, u.beamOp + .015);
+        u.armPh += .06;
+        u.armOut = Math.max(0, Math.sin(u.armPh * .35));
         if (u.hoverTimer > u.hoverFrames) {
           u.phase = 'exit';
-          u.vx = u.dir * (3.5 + Math.random() * 2);
-          u.vy = -(1.5 + Math.random());
+          u.vx = u.dir * 1.8;
+          u.vy = -0.8;
           u.beamOp = 0;
         }
+
       } else {
-        // Exit: accelerate away
-        u.vx *= 1.06;
-        u.vy *= 1.04;
-        u.x += u.vx; u.y += u.vy;
+        // Exit: smooth acceleration away using ease-in (starts slow, ends fast)
+        u.vx += u.dir * 0.22;
+        u.vy -= 0.06;
+        u.x += u.vx;
+        u.y += u.vy;
       }
 
       const sc = u.scale;
