@@ -1308,83 +1308,104 @@ class AtmCanvas {
       }
 
       const sc = b.sc;
-      const half = 18 * sc;
+      const half = 18 * sc;   // half-width of cube face
+      const dep  = half * 0.5; // isometric depth offset — makes all faces equal
 
       // ── Draw tractor beam first (behind cube) ──
       if (b.beamOp > 0.01) {
         ctx.save();
-        ctx.globalAlpha = b.beamOp * 0.55;
-        // Beam from bottom of cube to sun/moon
-        const bx1 = b.x - half * 0.3, bx2 = b.x + half * 0.3;
+        ctx.globalAlpha = b.beamOp * 0.6;
+        // Beam fans from full cube width at top down to sun/moon disc width at bottom
+        const beamTopHalf = half;              // full cube width at origin
+        const beamBotHalf = 26 * sc;          // wide enough to envelope the sun/moon disc
         const byTop = b.y + half;
         const byBot = b.ty;
         const beamGrad = ctx.createLinearGradient(b.x, byTop, b.x, byBot);
-        beamGrad.addColorStop(0, 'rgba(0,255,80,0.9)');
-        beamGrad.addColorStop(0.5,'rgba(0,220,60,0.5)');
-        beamGrad.addColorStop(1, 'rgba(0,180,40,0)');
+        beamGrad.addColorStop(0,   'rgba(0,255,80,0.85)');
+        beamGrad.addColorStop(0.4, 'rgba(0,230,70,0.55)');
+        beamGrad.addColorStop(1,   'rgba(0,200,55,0.15)');
         ctx.fillStyle = beamGrad;
         ctx.beginPath();
-        ctx.moveTo(bx1, byTop);
-        ctx.lineTo(bx2, byTop);
-        ctx.lineTo(b.tx + half * 0.8, byBot);
-        ctx.lineTo(b.tx - half * 0.8, byBot);
+        ctx.moveTo(b.x - beamTopHalf, byTop);
+        ctx.lineTo(b.x + beamTopHalf, byTop);
+        ctx.lineTo(b.tx + beamBotHalf, byBot);
+        ctx.lineTo(b.tx - beamBotHalf, byBot);
         ctx.closePath(); ctx.fill();
-        // Green glow at target
+        // Wide green glow covering the sun/moon disc
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = b.beamOp * 0.35;
-        const tg = ctx.createRadialGradient(b.tx, b.ty, 0, b.tx, b.ty, 28 * sc);
-        tg.addColorStop(0, 'rgba(0,255,80,0.8)');
+        ctx.globalAlpha = b.beamOp * 0.45;
+        const glowR = 34 * sc;
+        const tg = ctx.createRadialGradient(b.tx, b.ty, 0, b.tx, b.ty, glowR);
+        tg.addColorStop(0, 'rgba(0,255,80,0.9)');
+        tg.addColorStop(0.5,'rgba(0,200,60,0.4)');
         tg.addColorStop(1, 'rgba(0,255,80,0)');
         ctx.fillStyle = tg;
-        ctx.beginPath(); ctx.arc(b.tx, b.ty, 28 * sc, 0, PI2); ctx.fill();
+        ctx.beginPath(); ctx.arc(b.tx, b.ty, glowR, 0, PI2); ctx.fill();
         ctx.restore();
       }
 
-      // ── Draw Borg cube ──
+      // ── Draw Borg cube (isometric — all three visible faces equal size) ──
       ctx.save(); ctx.translate(b.x, b.y);
 
-      // Top face (slightly lighter — lit from above)
-      const topCol = dark ? 'rgba(55,68,58,1)' : 'rgba(65,80,68,1)';
-      ctx.fillStyle = topCol;
+      // Top face — parallelogram sitting above the front face
+      ctx.fillStyle = dark ? 'rgba(62,78,64,1)' : 'rgba(72,90,74,1)';
       ctx.beginPath();
-      ctx.moveTo(-half,    -half);
-      ctx.lineTo( half,    -half);
-      ctx.lineTo( half * 1.28, -half * 0.68);
-      ctx.lineTo(-half * 0.72, -half * 0.68);
+      ctx.moveTo(-half,       -half);           // front-left
+      ctx.lineTo( half,       -half);           // front-right
+      ctx.lineTo( half + dep, -half - dep);     // back-right
+      ctx.lineTo(-half + dep, -half - dep);     // back-left
       ctx.closePath(); ctx.fill();
 
-      // Front face
-      const frontGrad = ctx.createLinearGradient(0, -half * 0.68, 0, half * 0.68);
-      frontGrad.addColorStop(0, dark ? 'rgba(45,58,48,1)' : 'rgba(55,70,58,1)');
+      // Front face — perfect square
+      const frontGrad = ctx.createLinearGradient(0, -half, 0, half);
+      frontGrad.addColorStop(0, dark ? 'rgba(48,62,50,1)' : 'rgba(58,74,60,1)');
       frontGrad.addColorStop(1, dark ? 'rgba(28,38,30,1)' : 'rgba(38,50,40,1)');
       ctx.fillStyle = frontGrad;
       ctx.beginPath();
-      ctx.moveTo(-half,    -half * 0.68);
-      ctx.lineTo( half,    -half * 0.68);
-      ctx.lineTo( half,     half * 0.68);
-      ctx.lineTo(-half,     half * 0.68);
+      ctx.moveTo(-half, -half);
+      ctx.lineTo( half, -half);
+      ctx.lineTo( half,  half);
+      ctx.lineTo(-half,  half);
       ctx.closePath(); ctx.fill();
 
-      // Right face (darker — in shadow)
-      ctx.fillStyle = dark ? 'rgba(22,30,24,1)' : 'rgba(32,42,34,1)';
+      // Right face — square depth panel in shadow
+      ctx.fillStyle = dark ? 'rgba(22,30,24,1)' : 'rgba(30,42,32,1)';
       ctx.beginPath();
-      ctx.moveTo(half,    -half * 0.68);
-      ctx.lineTo(half * 1.28, -half * 0.68);
-      ctx.lineTo(half * 1.28,  half * 0.68);
-      ctx.lineTo(half,         half * 0.68);
+      ctx.moveTo(half,       -half);
+      ctx.lineTo(half + dep, -half - dep);
+      ctx.lineTo(half + dep,  half - dep);
+      ctx.lineTo(half,        half);
       ctx.closePath(); ctx.fill();
 
-      // Green circuit lines on front face — horizontal and vertical grid
-      ctx.strokeStyle = `rgba(0,${180 + Math.floor(Math.sin(b.rotPh)*40)},60,0.65)`;
+      // Cube edges
+      ctx.strokeStyle = dark ? 'rgba(0,180,50,0.35)' : 'rgba(0,160,45,0.30)';
+      ctx.lineWidth = 0.8;
+      // Front face outline
+      ctx.beginPath();
+      ctx.rect(-half, -half, half * 2, half * 2);
+      ctx.stroke();
+      // Top face edges
+      ctx.beginPath();
+      ctx.moveTo(-half, -half); ctx.lineTo(-half + dep, -half - dep);
+      ctx.moveTo( half, -half); ctx.lineTo( half + dep, -half - dep);
+      ctx.moveTo(-half + dep, -half - dep); ctx.lineTo(half + dep, -half - dep);
+      ctx.stroke();
+      // Right face bottom edge
+      ctx.beginPath();
+      ctx.moveTo(half + dep, half - dep); ctx.lineTo(half, half);
+      ctx.stroke();
+
+      // Green circuit lines on front face — grid across the square face
+      ctx.strokeStyle = `rgba(0,${180 + Math.floor(Math.sin(b.rotPh)*40)},60,0.55)`;
       ctx.lineWidth = 0.7;
       const lines = 4;
       for (let l = 1; l < lines; l++) {
         const px = -half + (half * 2 / lines) * l;
-        const py = -half * 0.68 + (half * 1.36 / lines) * l;
-        // Vertical
-        ctx.globalAlpha = 0.5;
-        ctx.beginPath(); ctx.moveTo(px, -half*0.68); ctx.lineTo(px, half*0.68); ctx.stroke();
-        // Horizontal
+        const py = -half + (half * 2 / lines) * l;
+        ctx.globalAlpha = 0.45;
+        // Vertical line across full square height
+        ctx.beginPath(); ctx.moveTo(px, -half); ctx.lineTo(px, half); ctx.stroke();
+        // Horizontal line across full square width
         ctx.beginPath(); ctx.moveTo(-half, py); ctx.lineTo(half, py); ctx.stroke();
       }
 
