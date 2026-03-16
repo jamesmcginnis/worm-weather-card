@@ -25,8 +25,12 @@ Without that project, this card would not exist in anything close to its current
 ## ✨ Features
 
 - **Animated atmospheric canvas** — condition-accurate sky with birds, aurora, shooting stars, comets, planes with contrails, dust motes, heat shimmer, rain, snow, lightning and more
-- **Depth-layered volumetric clouds** — multi-puff organic clouds with rim highlights, parallax movement and lightning flash response
-- **Sci-Fi Effects** — occasional surprise visitors including a UFO with a waving alien, the USS Enterprise swooping toward warp, a sperm whale and accompanying bowl of petunias falling from the sky (with appropriate thoughts), and a swirling wormhole that opens and closes
+- **Depth-layered volumetric clouds** — multi-puff organic clouds with rim highlights, parallax movement, and lightning flash response
+- **Sci-Fi Effects** — individually toggleable surprise visitors:
+  - 🛸 **UFO** — alien saucer glides in, hovers with a tractor beam, and a tiny alien waves from the dome before it zooms away
+  - 🚀 **USS Enterprise** — NCC-1701 cruises across the full screen at a shallow angle, then engages warp and climbs out of frame with glowing nacelle trails
+  - 🟩 **Borg Cube** — flies in, locks a cone-shaped green tractor beam onto the Sun or Moon, causing it to turn red and wobble, then disengages and departs. *Resistance is futile.*
+  - ⭕ **Stargate** — a Stargate SG-1 style kawoosh erupts, the gate holds open with rippling blue liquid surface and rotating chevron symbols, then closes
 - **Live radar map** — powered by [RainViewer](https://www.rainviewer.com/), continuously animating the past ~2 hours of precipitation with smooth crossfade between frames and a vivid TITAN colour scheme. Pinch and scroll to zoom, drag to pan
 - **Forecast tab** — scrollable day tabs with hourly breakdown; tap any day to see that day's hourly forecast
 - **Weather tab** — compact current conditions with hourly strip and condition tiles (humidity, wind, pressure, UV, visibility, dew point, cloud cover, precipitation)
@@ -72,7 +76,10 @@ animation_speed: 600        # milliseconds per radar frame
 auto_animate: true          # start radar animation automatically
 show_details: true          # condition tiles on Weather tab
 show_wind_on_compact: false # wind speed on mini card
-scifi_effects: true         # UFO, Enterprise, whale, wormhole
+scifiUFO: true              # alien UFO animation
+scifiEnterprise: true       # USS Enterprise animation
+scifiBorg: true             # Borg Cube tractor beam animation
+scifiWormhole: true         # Stargate wormhole animation
 ```
 
 ---
@@ -84,7 +91,7 @@ The card reads your weather entity condition and `sun.sun` to determine day or n
 | Condition | What you see |
 |---|---|
 | Sunny / Exceptional | Blue sky, pulsing sun with corona, dust motes, heat shimmer |
-| Partly Cloudy | Sky, sun, volumetric clouds |
+| Partly Cloudy | Sky, sun, depth-layered volumetric clouds |
 | Cloudy | Overcast clouds in multiple depth layers |
 | Rainy / Pouring | Dark clouds, visible rain streaks |
 | Snowy | Snow particles in three size tiers with wobble drift |
@@ -95,7 +102,7 @@ The card reads your weather entity condition and `sun.sun` to determine day or n
 | Any night | Moon, stars appropriate to cloud cover |
 | Any (rare) | Birds in V-formation, planes with contrails |
 | Aurora | 4% chance on clear/partly-cloudy dark nights |
-| Sci-Fi (optional) | UFO, USS Enterprise, whale + petunias, wormhole |
+| Sci-Fi (optional) | UFO, USS Enterprise, Borg Cube, Stargate — each individually toggleable |
 
 ---
 
