@@ -233,7 +233,7 @@ class AtmCanvas {
     this._birds=[]; this._windVapor=[];
     this._shootStars=[]; this._comets=[]; this._planes=[];
     this._dustMotes=[]; this._ufos=[]; this._enterprise=[];
-    this._borg=[]; this._borgTint=0; this._wormhole=null; this._aurora=null;
+    this._borg=[]; this._borgTint=0; this._borgWobblePh=0; this._wormhole=null; this._aurora=null;
     this._flashOp=0;
 
     this._buildStars(c, w, h);
@@ -691,7 +691,8 @@ class AtmCanvas {
 
   /* ── Moon ────────────────────────────────────────────────────── */
   _dMoon(ctx, w, h) {
-    const mx=w*.73, my=h*.26, dark=this._isDark, PI2=Math.PI*2;
+    const wobble = this._borgTint > 0 ? Math.sin(this._borgWobblePh) * 3.5 * this._borgTint : 0;
+    const mx=w*.73 + wobble, my=h*.26, dark=this._isDark, PI2=Math.PI*2;
     const moonR=Math.min(h*.115,22), pulse=1+Math.sin(this._moonPh*.8)*.016;
     ctx.globalCompositeOperation=dark?'screen':'source-over';
     const glowR=moonR*(dark?3.5:2.8);
@@ -719,7 +720,8 @@ class AtmCanvas {
   _dSun(ctx, w, h) {
     const c=this._cond;
     if (c==='fog'||c==='lightning'||c==='lightning-rainy'||c==='pouring') return;
-    const sx=w*.74, sy=h*.25, dark=this._isDark, PI2=Math.PI*2;
+    const wobble = this._borgTint > 0 ? Math.sin(this._borgWobblePh) * 3.5 * this._borgTint : 0;
+    const sx=w*.74 + wobble, sy=h*.25, dark=this._isDark, PI2=Math.PI*2;
     const pulse=1+Math.sin(this._sunPh*.55)*.032, sunR=Math.min(h*.13,24);
     const cR=sunR*(dark?3.5:5.5)*pulse;
     const cor=ctx.createRadialGradient(sx,sy,0,sx,sy,cR);
@@ -1290,12 +1292,14 @@ class AtmCanvas {
         // Gentle hover
         b.y += Math.sin(b.rotPh * 0.5) * 0.18;
         this._borgTint = Math.min(1, this._borgTint + 0.01);
+        this._borgWobblePh += 0.14;  // wobble the sun/moon while locked
         if (b.holdTimer >= b.holdDuration) {
           b.phase = 'release';
         }
       } else if (b.phase === 'release') {
         b.beamOp = Math.max(0, b.beamOp - 0.05);
         this._borgTint = Math.max(0, this._borgTint - 0.03);
+        this._borgWobblePh += 0.08;  // continue wobbling briefly as beam fades
         if (b.beamOp <= 0) {
           b.phase = 'exit';
           b.vx = b.dir * 1.2;
@@ -1314,33 +1318,39 @@ class AtmCanvas {
       // ── Draw tractor beam first (behind cube) ──
       if (b.beamOp > 0.01) {
         ctx.save();
-        ctx.globalAlpha = b.beamOp * 0.6;
-        // Cone: narrow at cube base, widens to cover the full sun/moon disc
-        const beamTopHalf = half * 0.18;       // narrow exit point at cube underside
-        const beamBotHalf = 30 * sc;           // wide cone at target, covers sun/moon disc
-        const byTop = b.y + half;
-        const byBot = b.ty;
-        const beamGrad = ctx.createLinearGradient(b.x, byTop, b.x, byBot);
-        beamGrad.addColorStop(0,   'rgba(0,255,80,0.90)');
-        beamGrad.addColorStop(0.35,'rgba(0,230,70,0.65)');
-        beamGrad.addColorStop(1,   'rgba(0,200,55,0.20)');
+        // Sun/moon disc radius: sunR = min(h*0.13, 24), dR = sunR*2.5 (light disc)
+        // We want the beam bottom to exactly match the visible disc width
+        const targetR = Math.min(h * 0.13, 24) * 2.5; // matches dR in _dSun/_dMoon
+        const beamTopHalf = 2.5;          // tight ~5px slit at cube underside — clearly a point
+        const beamBotHalf = targetR;      // fans out to full sun/moon disc width
+
+        const beamTop_y = b.y + half;     // bottom of the Borg cube
+        const beamBot_y = b.ty;           // sun/moon centre
+
+        // Beam fill — green gradient fading to transparent at target
+        const beamGrad = ctx.createLinearGradient(0, beamTop_y, 0, beamBot_y);
+        beamGrad.addColorStop(0,   'rgba(0,255,80,0.85)');
+        beamGrad.addColorStop(0.5, 'rgba(0,210,65,0.50)');
+        beamGrad.addColorStop(1,   'rgba(0,180,50,0.12)');
         ctx.fillStyle = beamGrad;
+        ctx.globalAlpha = b.beamOp * 0.70;
         ctx.beginPath();
-        ctx.moveTo(b.x - beamTopHalf, byTop);
-        ctx.lineTo(b.x + beamTopHalf, byTop);
-        ctx.lineTo(b.tx + beamBotHalf, byBot);
-        ctx.lineTo(b.tx - beamBotHalf, byBot);
-        ctx.closePath(); ctx.fill();
-        // Wide green glow at the target covering the sun/moon disc
+        ctx.moveTo(b.x  - beamTopHalf, beamTop_y);   // narrow top-left
+        ctx.lineTo(b.x  + beamTopHalf, beamTop_y);   // narrow top-right
+        ctx.lineTo(b.tx + beamBotHalf, beamBot_y);   // wide bottom-right
+        ctx.lineTo(b.tx - beamBotHalf, beamBot_y);   // wide bottom-left
+        ctx.closePath();
+        ctx.fill();
+
+        // Bright green glow ring at target enveloping the full disc
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = b.beamOp * 0.45;
-        const glowR = 34 * sc;
-        const tg = ctx.createRadialGradient(b.tx, b.ty, 0, b.tx, b.ty, glowR);
-        tg.addColorStop(0,   'rgba(0,255,80,0.9)');
-        tg.addColorStop(0.5, 'rgba(0,200,60,0.4)');
-        tg.addColorStop(1,   'rgba(0,255,80,0)');
+        ctx.globalAlpha = b.beamOp * 0.50;
+        const tg = ctx.createRadialGradient(b.tx, b.ty, targetR * 0.3, b.tx, b.ty, targetR * 1.2);
+        tg.addColorStop(0,   'rgba(0,255,80,0.6)');
+        tg.addColorStop(0.5, 'rgba(0,220,60,0.3)');
+        tg.addColorStop(1,   'rgba(0,200,50,0)');
         ctx.fillStyle = tg;
-        ctx.beginPath(); ctx.arc(b.tx, b.ty, glowR, 0, PI2); ctx.fill();
+        ctx.beginPath(); ctx.arc(b.tx, b.ty, targetR * 1.2, 0, PI2); ctx.fill();
         ctx.restore();
       }
 
