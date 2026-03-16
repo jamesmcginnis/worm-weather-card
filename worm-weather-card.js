@@ -713,10 +713,41 @@ class AtmCanvas {
       ctx.beginPath(); ctx.ellipse(mx+moonR*.33,my-moonR*.24,moonR*.20,moonR*.14,-.3,0,PI2); ctx.fill();
       ctx.restore();
     }
+    // Borg tractor beam — natural red energy aura on moon
+    if (this._borgTint > 0) {
+      const t = this._borgTint;
+      const pulse = 1 + Math.sin(this._borgWobblePh * 1.8) * 0.12 * t;
+      ctx.save();
+      // Outer disturbed halo
+      ctx.globalCompositeOperation = 'screen';
+      const outerG = ctx.createRadialGradient(mx, my, moonR * 0.7, mx, my, moonR * 3.2 * pulse);
+      outerG.addColorStop(0,    'rgba(200,30,0,0)');
+      outerG.addColorStop(0.35, `rgba(220,40,10,${0.20 * t})`);
+      outerG.addColorStop(0.65, `rgba(180,25,5,${0.12 * t})`);
+      outerG.addColorStop(1,    'rgba(150,15,0,0)');
+      ctx.fillStyle = outerG;
+      ctx.beginPath(); ctx.arc(mx, my, moonR * 3.2 * pulse, 0, PI2); ctx.fill();
+      // Mid corona shift
+      const midG = ctx.createRadialGradient(mx, my, 0, mx, my, moonR * 1.8 * pulse);
+      midG.addColorStop(0,   'rgba(255,20,0,0)');
+      midG.addColorStop(0.4, `rgba(240,15,0,${0.18 * t})`);
+      midG.addColorStop(0.75,`rgba(200,10,0,${0.10 * t})`);
+      midG.addColorStop(1,   'rgba(180,8,0,0)');
+      ctx.fillStyle = midG;
+      ctx.beginPath(); ctx.arc(mx, my, moonR * 1.8 * pulse, 0, PI2); ctx.fill();
+      // Inner disc tint
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalAlpha = t * 0.40;
+      const innerG = ctx.createRadialGradient(mx - moonR*.2, my - moonR*.2, 0, mx, my, moonR * pulse);
+      innerG.addColorStop(0,   'rgba(255,130,90,1)');
+      innerG.addColorStop(0.5, 'rgba(255,65,35,1)');
+      innerG.addColorStop(1,   'rgba(210,25,10,1)');
+      ctx.fillStyle = innerG;
+      ctx.beginPath(); ctx.arc(mx, my, moonR * pulse, 0, PI2); ctx.fill();
+      ctx.restore();
+    }
     ctx.globalAlpha=1;
   }
-
-  /* ── Sun ─────────────────────────────────────────────────────── */
   _dSun(ctx, w, h) {
     const c=this._cond;
     if (c==='fog'||c==='lightning'||c==='lightning-rainy'||c==='pouring') return;
@@ -733,12 +764,37 @@ class AtmCanvas {
     dark?(disc.addColorStop(0,'rgba(255,255,218,1)'),disc.addColorStop(.38,'rgba(255,218,65,1)'),disc.addColorStop(1,'rgba(255,132,0,1)'))
         :(disc.addColorStop(0,'rgba(255,255,255,1)'),disc.addColorStop(.25,'rgba(255,255,228,.98)'),disc.addColorStop(.52,'rgba(255,235,150,.88)'),disc.addColorStop(.78,'rgba(255,195,58,.48)'),disc.addColorStop(1,'rgba(255,160,28,0)'));
     ctx.fillStyle=disc; ctx.beginPath(); ctx.arc(sx,sy,dR,0,PI2); ctx.fill();
-    // Borg tractor beam — red tint overlay
+    // Borg tractor beam — natural red energy aura
     if (this._borgTint > 0) {
-      ctx.save(); ctx.globalCompositeOperation='multiply';
-      ctx.globalAlpha = this._borgTint * 0.65;
-      ctx.fillStyle='rgba(255,40,20,1)';
-      ctx.beginPath(); ctx.arc(sx,sy,dR*1.4,0,PI2); ctx.fill();
+      const t = this._borgTint;
+      const pulse = 1 + Math.sin(this._borgWobblePh * 1.8) * 0.12 * t; // aura breathes with wobble
+      ctx.save();
+      // Layer 1: wide outer disturbance halo — red-orange, very soft
+      ctx.globalCompositeOperation = 'screen';
+      const outerG = ctx.createRadialGradient(sx, sy, dR * 0.6, sx, sy, dR * 2.8 * pulse);
+      outerG.addColorStop(0,   `rgba(200,30,0,0)`);
+      outerG.addColorStop(0.35,`rgba(220,40,10,${0.18 * t})`);
+      outerG.addColorStop(0.65,`rgba(180,25,5,${0.12 * t})`);
+      outerG.addColorStop(1,    'rgba(160,20,0,0)');
+      ctx.fillStyle = outerG;
+      ctx.beginPath(); ctx.arc(sx, sy, dR * 2.8 * pulse, 0, PI2); ctx.fill();
+      // Layer 2: mid corona shift — pulls the normal warm corona toward deep red
+      const midG = ctx.createRadialGradient(sx, sy, 0, sx, sy, dR * 1.6 * pulse);
+      midG.addColorStop(0,   `rgba(255,20,0,0)`);
+      midG.addColorStop(0.4, `rgba(240,15,0,${0.22 * t})`);
+      midG.addColorStop(0.75,`rgba(200,10,0,${0.14 * t})`);
+      midG.addColorStop(1,   'rgba(180,8,0,0)');
+      ctx.fillStyle = midG;
+      ctx.beginPath(); ctx.arc(sx, sy, dR * 1.6 * pulse, 0, PI2); ctx.fill();
+      // Layer 3: inner disc tint — warms/reddens the disc surface naturally
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalAlpha = t * 0.45;
+      const innerG = ctx.createRadialGradient(sx-sunR*.2, sy-sunR*.2, 0, sx, sy, dR);
+      innerG.addColorStop(0,   `rgba(255,120,80,1)`);
+      innerG.addColorStop(0.5, `rgba(255,60,30,1)`);
+      innerG.addColorStop(1,   `rgba(200,20,10,1)`);
+      ctx.fillStyle = innerG;
+      ctx.beginPath(); ctx.arc(sx, sy, dR, 0, PI2); ctx.fill();
       ctx.restore();
     }
   }
