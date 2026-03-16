@@ -4,13 +4,13 @@
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=jamesmcginnis&repository=worm-weather-card&category=plugin)
 
+A Home Assistant Lovelace card with a live animated radar map and a full atmospheric weather canvas.
+
 ![Preview 1](preview1.png)
 ![Preview 2](preview2.png)
 ![Preview 3](preview3.png)
 ![Preview 4](preview4.png)
 ![Preview 5](preview5.png)
-
-A Home Assistant Lovelace card with a live radar map and atmospheric weather animations.
 
 ---
 
@@ -24,19 +24,21 @@ This card would not exist without that work. Please visit and star the original 
 
 ## What's included
 
-- Condition-accurate animated canvas (light theme, matching the original Atmospheric Weather Card)
-- Live RainViewer radar with smooth crossfade animation
-- Forecast tab with clickable day tabs — tap any day for its hourly breakdown
-- Weather tab with hourly strip and condition tiles
-- Postcode / ZIP geocoding to centre the radar map on your location
-- iOS-style visual editor — no YAML required
+- Condition-accurate atmospheric canvas that switches between day and night using your `sun.sun` entity
+- Depth-layered volumetric clouds with rim highlights and parallax drift
+- Rain, snow, lightning, fog and heat shimmer rendered for the appropriate conditions
+- Live RainViewer radar animating the past ~2 hours of precipitation — pinch to zoom, drag to pan
+- Forecast tab with clickable day tabs showing hourly breakdown per day
+- Weather tab with current conditions, hourly strip, and condition tiles
+- **Sci-Fi Effects** (optional, toggleable): UFO with waving alien, USS Enterprise warping away, a sperm whale and bowl of petunias falling from the sky (with appropriate thoughts courtesy of Douglas Adams), and a swirling wormhole that opens and closes
+- Clean visual editor — no YAML required
 
 ---
 
 ## Requirements
 
 - Home Assistant 2023.9 or newer (for `weather.get_forecasts`)
-- A `weather.*` entity (the built-in Home Assistant weather integration works perfectly)
+- A `weather.*` entity
 
 ---
 
