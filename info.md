@@ -30,7 +30,11 @@ This card would not exist without that work. Please visit and star the original 
 - Live RainViewer radar animating the past ~2 hours of precipitation — pinch to zoom, drag to pan
 - Forecast tab with clickable day tabs showing hourly breakdown per day
 - Weather tab with current conditions, hourly strip, and condition tiles
-- **Sci-Fi Effects** (optional, toggleable): UFO with waving alien, USS Enterprise warping away, a sperm whale and bowl of petunias falling from the sky (with appropriate thoughts courtesy of Douglas Adams), and a swirling wormhole that opens and closes
+- **Sci-Fi Effects** — four independently toggleable animations:
+  - **UFO** — alien saucer glides in, a tiny alien waves from the dome, then it zooms off
+  - **USS Enterprise** — NCC-1701 cruises across the full sky with glowing nacelle trails, then warps away
+  - **Borg Cube** — locks a green cone tractor beam onto the Sun or Moon, turning it red and making it wobble. *Resistance is futile.*
+  - **Stargate** — SG-1 kawoosh erupts, the gate holds open with a rippling blue liquid surface and rotating chevrons, then closes
 - Clean visual editor — no YAML required
 
 ---
