@@ -159,9 +159,13 @@ class AtmCanvas {
     this._birds        = []; this._windVapor  = [];
     this._shootStars   = []; this._comets     = [];
     this._planes       = []; this._dustMotes  = [];
-    this._ufos         = [];
+    this._ufos         = []; this._enterprise = [];
+    this._whales       = []; this._wormhole   = null;
     this._aurora       = null;
     this._birdTimer = 0; this._planeTimer = 0; this._ufoTimer = 0;
+    this._enterpriseTimer = 0; this._whaleTimer = 0; this._wormholeTimer = 0;
+    // Sci-fi mode flag (set from card config)
+    this._scifi = true;
     // State
     this._cond = 'sunny'; this._isNight = false; this._isDark = true;
     this._w = 0; this._h = 0;
@@ -172,18 +176,18 @@ class AtmCanvas {
   }
 
   /* ── Public API ──────────────────────────────────────────────── */
-  init(cond, isNight, isDark, w, h) {
+  init(cond, isNight, isDark, w, h, scifi = true) {
     this._cond = cond || 'cloudy';
-    this._isNight = !!isNight; this._isDark = !!isDark;
+    this._isNight = !!isNight; this._isDark = !!isDark; this._scifi = !!scifi;
     this._w = w; this._h = h;
     this._cv.width = w; this._cv.height = h;
     this._ctx = this._cv.getContext('2d');
     this._build();
   }
 
-  update(cond, isNight, isDark) {
-    const ch = this._cond !== cond || this._isNight !== !!isNight || this._isDark !== !!isDark;
-    this._cond = cond; this._isNight = !!isNight; this._isDark = !!isDark;
+  update(cond, isNight, isDark, scifi = true) {
+    const ch = this._cond !== cond || this._isNight !== !!isNight || this._isDark !== !!isDark || this._scifi !== !!scifi;
+    this._cond = cond; this._isNight = !!isNight; this._isDark = !!isDark; this._scifi = !!scifi;
     if (ch) this._build();
   }
 
@@ -225,7 +229,8 @@ class AtmCanvas {
     this._snow=[]; this._bolts=[]; this._fog=[];
     this._birds=[]; this._windVapor=[];
     this._shootStars=[]; this._comets=[]; this._planes=[];
-    this._dustMotes=[]; this._ufos=[]; this._aurora=null;
+    this._dustMotes=[]; this._ufos=[]; this._enterprise=[];
+    this._whales=[]; this._wormhole=null; this._aurora=null;
     this._flashOp=0;
 
     this._buildStars(c, w, h);
@@ -448,6 +453,13 @@ class AtmCanvas {
     const ctx=this._ctx; if(!ctx) return;
     const w=this._w, h=this._h, c=this._cond;
     this._frame++; this._gustPh+=.008; this._sunPh+=.006; this._moonPh+=.003; this._shimmerPh+=.018;
+    if (this._scifi) {
+      this._wormholeTimer++;
+      if (!this._wormhole && this._wormholeTimer > 600 && Math.random() < .0008) {
+        this._wormholeTimer = 0;
+        this._wormhole = this._makeWormhole(w, h);
+      }
+    }
     ctx.clearRect(0,0,w,h);
     this._dSky(ctx,w,h);
     // Background layers
@@ -464,6 +476,9 @@ class AtmCanvas {
     if (!this._isNight)       this._dBirds(ctx,w,h);
     this._dPlanes(ctx,w,h);
     this._dUFO(ctx,w,h);
+    this._dEnterprise(ctx,w,h);
+    this._dWhale(ctx,w,h);
+    if (this._wormhole) this._dWormhole(ctx,w,h);
     // Foreground clouds (layer 3) drawn on top — UFO passes behind these
     if (this._clouds.length)  this._dClouds(ctx,w,h, 3, 3);
     if (this._dustMotes.length&&!this._isNight) this._dDustMotes(ctx,w,h);
@@ -932,6 +947,7 @@ class AtmCanvas {
   }
 
   _dUFO(ctx, w, h) {
+    if (!this._scifi) return;
     this._ufoTimer++;
     if (this._ufos.length === 0 && this._ufoTimer > 480 && Math.random() < .0015) {
       this._ufoTimer = 0;
@@ -1070,6 +1086,410 @@ class AtmCanvas {
     }
     ctx.globalAlpha = 1;
   }
+  /* ── USS Enterprise (NCC-1701) ───────────────────────────────── */
+  _spawnEnterprise(w, h) {
+    const goRight = Math.random() > .5;
+    const dir = goRight ? 1 : -1;
+    this._enterprise.push({
+      x: goRight ? -160 : w + 160,
+      y: h * (.18 + Math.random() * .35),
+      vx: dir * (1.8 + Math.random() * 0.8),
+      vy: -(0.55 + Math.random() * 0.35), // angles upward toward space
+      trail: [], // nacelle warp trail points
+      sc: 0.55 + Math.random() * 0.3,
+      dir,
+      lightPh: Math.random() * Math.PI * 2,
+    });
+  }
+
+  _dEnterprise(ctx, w, h) {
+    if (!this._scifi) return;
+    this._enterpriseTimer++;
+    if (this._enterprise.length === 0 && this._enterpriseTimer > 520 && Math.random() < .0014) {
+      this._enterpriseTimer = 0;
+      this._spawnEnterprise(w, h);
+    }
+    const PI2 = Math.PI * 2, dark = this._isDark;
+    for (let i = this._enterprise.length - 1; i >= 0; i--) {
+      const e = this._enterprise[i];
+      e.x += e.vx; e.y += e.vy; e.lightPh += .09;
+      // Gradually accelerate — warping out
+      e.vx += e.dir * 0.04;
+      e.vy -= 0.012;
+      // Store nacelle trail positions (two nacelles offset from hull)
+      const angle = Math.atan2(e.vy, e.vx);
+      const perpX = -Math.sin(angle) * 9 * e.sc;
+      const perpY =  Math.cos(angle) * 9 * e.sc;
+      e.trail.push({ x1: e.x + perpX, y1: e.y + perpY, x2: e.x - perpX, y2: e.y - perpY, age: 0 });
+      if (e.trail.length > 38) e.trail.shift();
+
+      ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(angle);
+      const sc = e.sc;
+
+      // Nacelle warp trails (drawn behind ship)
+      for (const pt of e.trail) pt.age++;
+      ctx.save();
+      ctx.translate(-e.x, -e.y); // undo translate so trail uses absolute coords
+      for (let t = 1; t < e.trail.length; t++) {
+        const alpha = (t / e.trail.length) * 0.55;
+        const thinning = t / e.trail.length;
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = `hsl(${200 + t * 2},100%,${75 - t}%)`;
+        ctx.lineWidth = thinning * 2.2 * sc;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(e.trail[t-1].x1, e.trail[t-1].y1);
+        ctx.lineTo(e.trail[t].x1,   e.trail[t].y1);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(e.trail[t-1].x2, e.trail[t-1].y2);
+        ctx.lineTo(e.trail[t].x2,   e.trail[t].y2);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+
+      // Primary hull (saucer section)
+      const saucerGrad = ctx.createRadialGradient(-2*sc, -1*sc, 0, 0, 0, 18*sc);
+      saucerGrad.addColorStop(0,  dark?'rgba(210,220,235,1)':'rgba(200,212,228,1)');
+      saucerGrad.addColorStop(.5, dark?'rgba(140,155,175,1)':'rgba(160,175,195,1)');
+      saucerGrad.addColorStop(1,  dark?'rgba(60,70,90,1)' :'rgba(100,115,138,1)');
+      ctx.fillStyle = saucerGrad;
+      ctx.beginPath(); ctx.ellipse(0, 0, 18*sc, 10*sc, 0, 0, PI2); ctx.fill();
+
+      // Secondary hull (engineering section — tapers behind saucer)
+      ctx.fillStyle = dark?'rgba(120,132,155,1)':'rgba(145,160,180,1)';
+      ctx.beginPath();
+      ctx.moveTo(-4*sc, 2*sc);
+      ctx.lineTo(-22*sc, 6*sc);
+      ctx.lineTo(-28*sc, 4*sc);
+      ctx.lineTo(-22*sc, 3*sc);
+      ctx.lineTo(-4*sc, -1*sc);
+      ctx.closePath(); ctx.fill();
+
+      // Two nacelles
+      for (const side of [-1, 1]) {
+        const ny = side * 9 * sc;
+        // Nacelle strut
+        ctx.strokeStyle = dark?'rgba(100,112,135,1)':'rgba(130,145,165,1)';
+        ctx.lineWidth = 1.8*sc; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(-8*sc, 0); ctx.lineTo(-14*sc, ny); ctx.stroke();
+        // Nacelle body
+        const nacGrad = ctx.createLinearGradient(-20*sc, ny-2*sc, -8*sc, ny+2*sc);
+        nacGrad.addColorStop(0, dark?'rgba(80,160,255,1)':'rgba(60,140,230,1)');
+        nacGrad.addColorStop(.4, dark?'rgba(180,200,230,1)':'rgba(160,185,215,1)');
+        nacGrad.addColorStop(1, dark?'rgba(60,70,90,1)':'rgba(90,105,130,1)');
+        ctx.fillStyle = nacGrad;
+        ctx.beginPath(); ctx.ellipse(-14*sc, ny, 8*sc, 2.2*sc, 0, 0, PI2); ctx.fill();
+        // Bussard collector (glowing red front)
+        ctx.save(); ctx.globalCompositeOperation='lighter';
+        const bcg = ctx.createRadialGradient(-22*sc, ny, 0, -22*sc, ny, 4*sc);
+        const blink = .5 + Math.sin(e.lightPh + side) * .5;
+        bcg.addColorStop(0, `rgba(255,80,60,${.8*blink})`);
+        bcg.addColorStop(1, 'rgba(255,80,60,0)');
+        ctx.fillStyle = bcg; ctx.beginPath(); ctx.arc(-22*sc, ny, 4*sc, 0, PI2); ctx.fill();
+        ctx.restore();
+      }
+
+      // Deflector dish glow
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const ddg = ctx.createRadialGradient(-20*sc, 4*sc, 0, -20*sc, 4*sc, 5*sc);
+      ddg.addColorStop(0, 'rgba(80,200,255,.7)'); ddg.addColorStop(1, 'rgba(80,200,255,0)');
+      ctx.fillStyle = ddg; ctx.beginPath(); ctx.arc(-20*sc, 4*sc, 5*sc, 0, PI2); ctx.fill();
+      ctx.restore();
+
+      ctx.restore();
+      if (e.x < -300 || e.x > w + 300 || e.y < -180) this._enterprise.splice(i, 1);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* ── Sperm Whale (Hitchhiker's Guide) ────────────────────────── */
+  _spawnWhale(w, h) {
+    const x = w * (.22 + Math.random() * .56);
+    this._whales.push({
+      x,
+      y: -60,
+      vy: 0.9 + Math.random() * 0.5,
+      tailPh: 0,
+      sc: 0.65 + Math.random() * 0.3,
+      bubbleOp: 0,
+      bubbleTimer: 0,
+      // Petunia bowl falls alongside, slightly to the side and a little slower
+      petunia: {
+        x: x + (Math.random() > 0.5 ? 1 : -1) * (55 + Math.random() * 30),
+        y: -30,
+        vy: 0.55 + Math.random() * 0.25,   // slower than whale
+        rot: Math.random() * Math.PI * 2,
+        rotV: (Math.random() - 0.5) * 0.04,
+        bubbleOp: 0,
+        bubbleTimer: 0,
+      },
+    });
+  }
+
+  _dWhale(ctx, w, h) {
+    if (!this._scifi) return;
+    this._whaleTimer++;
+    if (this._whales.length === 0 && this._whaleTimer > 550 && Math.random() < .0013) {
+      this._whaleTimer = 0;
+      this._spawnWhale(w, h);
+    }
+    const PI2 = Math.PI * 2, dark = this._isDark;
+    const whaleThoughts = ['Hello ground.', 'What is this?', 'I wonder if...'];
+
+    for (let i = this._whales.length - 1; i >= 0; i--) {
+      const wh = this._whales[i];
+      const pt = wh.petunia;
+
+      // ── Whale physics ──
+      wh.vy = Math.min(wh.vy + 0.04, 4.2);
+      wh.y += wh.vy;
+      wh.tailPh += 0.10;
+      wh.bubbleTimer++;
+      if (wh.bubbleTimer > 20) wh.bubbleOp = Math.min(1, wh.bubbleOp + 0.05);
+
+      // ── Petunia physics (slightly slower) ──
+      pt.vy = Math.min(pt.vy + 0.03, 3.2);
+      pt.y += pt.vy;
+      pt.rot += pt.rotV;
+      pt.bubbleTimer++;
+      if (pt.bubbleTimer > 28) pt.bubbleOp = Math.min(1, pt.bubbleOp + 0.05);
+
+      // ── Draw petunia bowl ──
+      ctx.save(); ctx.translate(pt.x, pt.y); ctx.rotate(pt.rot);
+      const psc = (wh.sc * 0.55);
+
+      // Thought bubble for petunia — "Oh no, not again."
+      if (pt.bubbleOp > 0.1) {
+        ctx.globalAlpha = Math.min(1, pt.bubbleOp * 0.85);
+        ctx.fillStyle = dark ? 'rgba(240,245,255,0.92)' : 'rgba(255,255,255,0.95)';
+        ctx.strokeStyle = dark ? 'rgba(180,195,220,0.5)' : 'rgba(160,175,200,0.6)';
+        ctx.lineWidth = 0.8;
+        // Bubble dots (above and left, since bowl is small)
+        for (const [dx,dy,r] of [[-18,-20,2.5],[-22,-27,3.5],[-28,-36,5.5]]) {
+          ctx.beginPath(); ctx.arc(dx*psc, dy*psc, r, 0, PI2);
+          ctx.fill(); ctx.stroke();
+        }
+        // Main bubble
+        if (ctx.roundRect) ctx.roundRect(-70*psc,-62*psc,78*psc,22*psc,6*psc);
+        else ctx.ellipse(-31*psc,-51*psc,40*psc,11*psc,0,0,PI2);
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-70*psc,-62*psc,78*psc,22*psc,6*psc);
+        else ctx.ellipse(-31*psc,-51*psc,40*psc,11*psc,0,0,PI2);
+        ctx.fill(); ctx.stroke();
+        ctx.globalAlpha = pt.bubbleOp * 0.9;
+        ctx.fillStyle = dark?'rgba(30,35,50,1)':'rgba(20,25,40,1)';
+        ctx.font = `${Math.round(6.5*psc)}px -apple-system,sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText('Oh no, not again.', -31*psc, -46*psc);
+        ctx.globalAlpha = 1; ctx.textAlign = 'left';
+      }
+
+      // Bowl — terracotta pot shape
+      ctx.fillStyle = dark?'rgba(180,90,55,1)':'rgba(195,100,65,1)';
+      ctx.beginPath();
+      ctx.moveTo(-10*psc, -4*psc);
+      ctx.lineTo(-13*psc,  12*psc);
+      ctx.lineTo( 13*psc,  12*psc);
+      ctx.lineTo( 10*psc, -4*psc);
+      ctx.closePath(); ctx.fill();
+      // Bowl rim
+      ctx.fillStyle = dark?'rgba(210,110,70,1)':'rgba(225,125,80,1)';
+      ctx.beginPath(); ctx.ellipse(0, -4*psc, 11*psc, 3.5*psc, 0, 0, PI2); ctx.fill();
+      // Soil
+      ctx.fillStyle = dark?'rgba(80,52,30,1)':'rgba(95,62,36,1)';
+      ctx.beginPath(); ctx.ellipse(0, -3*psc, 9*psc, 3*psc, 0, 0, PI2); ctx.fill();
+      // Petunia flowers (3 little flowers)
+      const flowerCols = ['rgba(255,105,180,1)','rgba(255,160,200,1)','rgba(220,80,180,1)'];
+      for (let f = 0; f < 3; f++) {
+        const fx = (f - 1) * 7 * psc;
+        const fy = -10 * psc - Math.abs(f-1)*2*psc;
+        ctx.fillStyle = flowerCols[f];
+        for (let p = 0; p < 5; p++) {
+          const pa = (p / 5) * PI2;
+          ctx.beginPath();
+          ctx.ellipse(fx + Math.cos(pa)*4*psc, fy + Math.sin(pa)*4*psc, 3*psc, 2*psc, pa, 0, PI2);
+          ctx.fill();
+        }
+        // Yellow centre
+        ctx.fillStyle = 'rgba(255,230,60,1)';
+        ctx.beginPath(); ctx.arc(fx, fy, 2.2*psc, 0, PI2); ctx.fill();
+        // Stem
+        ctx.strokeStyle = dark?'rgba(60,120,40,1)':'rgba(70,140,50,1)';
+        ctx.lineWidth = 1.2*psc; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(fx, fy+2*psc); ctx.lineTo(fx, -3*psc); ctx.stroke();
+      }
+      ctx.restore();
+
+      // ── Draw whale ──
+      const sc = wh.sc;
+      ctx.save(); ctx.translate(wh.x, wh.y);
+
+      // Whale thought bubble
+      if (wh.bubbleOp > 0.1) {
+        ctx.globalAlpha = Math.min(1, wh.bubbleOp * 0.85);
+        ctx.fillStyle = dark ? 'rgba(240,245,255,0.92)' : 'rgba(255,255,255,0.95)';
+        ctx.strokeStyle = dark ? 'rgba(180,195,220,0.5)' : 'rgba(160,175,200,0.6)';
+        ctx.lineWidth = 0.8;
+        for (const [dx,dy,r] of [[38*sc,-52*sc,3],[43*sc,-60*sc,4.5],[50*sc,-72*sc,7]]) {
+          ctx.beginPath(); ctx.arc(dx, dy, r, 0, PI2); ctx.fill(); ctx.stroke();
+        }
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(38*sc,-110*sc,90*sc,32*sc,8*sc);
+        else ctx.ellipse(83*sc,-94*sc,46*sc,17*sc,0,0,PI2);
+        ctx.fill(); ctx.stroke();
+        ctx.globalAlpha = wh.bubbleOp * 0.9;
+        ctx.fillStyle = dark?'rgba(30,35,50,1)':'rgba(20,25,40,1)';
+        ctx.font = `${Math.round(7*sc)}px -apple-system,sans-serif`;
+        ctx.textAlign = 'center';
+        const tIdx = Math.floor(wh.bubbleTimer / 90) % whaleThoughts.length;
+        ctx.fillText(whaleThoughts[tIdx], 83*sc, -89*sc);
+        ctx.globalAlpha = 1; ctx.textAlign = 'left';
+      }
+
+      // Body
+      const bodyGrad = ctx.createRadialGradient(-8*sc,-4*sc,0,0,0,32*sc);
+      bodyGrad.addColorStop(0,  dark?'rgba(90,115,145,1)':'rgba(100,130,160,1)');
+      bodyGrad.addColorStop(.55,dark?'rgba(55,75,100,1)' :'rgba(70,95,125,1)');
+      bodyGrad.addColorStop(1,  dark?'rgba(30,42,62,1)'  :'rgba(45,65,90,1)');
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.moveTo(-30*sc, 0);
+      ctx.bezierCurveTo(-30*sc,-18*sc, 22*sc,-18*sc, 28*sc, 0);
+      ctx.bezierCurveTo( 22*sc, 18*sc,-30*sc, 18*sc,-30*sc, 0);
+      ctx.fill();
+      // Belly
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = dark?'rgba(180,200,220,1)':'rgba(200,220,235,1)';
+      ctx.beginPath(); ctx.ellipse(0,8*sc,18*sc,7*sc,0,0,PI2); ctx.fill();
+      ctx.globalAlpha = 1;
+      // Head
+      ctx.fillStyle = dark?'rgba(75,98,128,1)':'rgba(88,115,148,1)';
+      ctx.beginPath(); ctx.ellipse(22*sc,0,12*sc,9*sc,0,0,PI2); ctx.fill();
+      // Eye
+      ctx.fillStyle = dark?'rgba(230,240,255,1)':'rgba(255,255,255,1)';
+      ctx.beginPath(); ctx.arc(24*sc,-4*sc,2.8*sc,0,PI2); ctx.fill();
+      ctx.fillStyle = 'rgba(20,20,30,1)';
+      ctx.beginPath(); ctx.arc(24.5*sc,-4*sc,1.4*sc,0,PI2); ctx.fill();
+      // Tail
+      const fluke = Math.sin(wh.tailPh) * 0.38;
+      ctx.fillStyle = dark?'rgba(55,75,100,1)':'rgba(65,88,115,1)';
+      for (const side of [-1,1]) {
+        ctx.save(); ctx.translate(-30*sc,side*3*sc); ctx.rotate(fluke*side);
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.bezierCurveTo(-8*sc,side*2*sc,-16*sc,side*10*sc,-22*sc,side*8*sc);
+        ctx.bezierCurveTo(-18*sc,side*4*sc,-10*sc,0,0,0);
+        ctx.fill(); ctx.restore();
+      }
+      ctx.restore();
+
+      if (wh.y > h + 120) this._whales.splice(i, 1);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* ── Wormhole ────────────────────────────────────────────────── */
+  _makeWormhole(w, h) {
+    return {
+      x: w * (.22 + Math.random() * .56),
+      y: h * (.12 + Math.random() * .45),
+      phase: 'open',    // open → hold → close
+      progress: 0,      // 0→1 for open/close
+      holdTimer: 0,
+      holdDuration: 120 + Math.floor(Math.random() * 80),
+      maxR: 28 + Math.random() * 18,
+      spin: 0,
+      hue: Math.floor(Math.random() * 360),
+    };
+  }
+
+  _dWormhole(ctx, w, h) {
+    if (!this._wormhole) return;
+    const wh = this._wormhole;
+    wh.spin += 0.055;
+    const PI2 = Math.PI * 2;
+
+    if (wh.phase === 'open') {
+      wh.progress = Math.min(1, wh.progress + 0.025);
+      if (wh.progress >= 1) wh.phase = 'hold';
+    } else if (wh.phase === 'hold') {
+      wh.holdTimer++;
+      if (wh.holdTimer >= wh.holdDuration) wh.phase = 'close';
+    } else {
+      wh.progress = Math.max(0, wh.progress - 0.020);
+      if (wh.progress <= 0) { this._wormhole = null; return; }
+    }
+
+    const eased = wh.progress < 0.5
+      ? 4 * wh.progress * wh.progress * wh.progress
+      : 1 - Math.pow(-2 * wh.progress + 2, 3) / 2;
+    const r = wh.maxR * eased;
+    if (r < 1) return;
+
+    ctx.save();
+    ctx.translate(wh.x, wh.y);
+
+    // Outer distortion rings
+    for (let ring = 5; ring >= 1; ring--) {
+      const rr = r * (0.6 + ring * 0.12);
+      const op = (1 - ring / 6) * 0.35 * eased;
+      ctx.globalAlpha = op;
+      ctx.beginPath(); ctx.arc(0, 0, rr, 0, PI2);
+      ctx.strokeStyle = `hsla(${(wh.hue + ring * 25) % 360},90%,65%,1)`;
+      ctx.lineWidth = 2.5 - ring * 0.3;
+      ctx.stroke();
+    }
+
+    // Swirling spiral arms (6 arms rotating)
+    ctx.globalAlpha = 0.7 * eased;
+    for (let arm = 0; arm < 6; arm++) {
+      const armAngle = (arm / 6) * PI2 + wh.spin;
+      ctx.save();
+      ctx.rotate(armAngle);
+      const armGrad = ctx.createLinearGradient(0, 0, r, 0);
+      armGrad.addColorStop(0, `hsla(${wh.hue},100%,80%,.0)`);
+      armGrad.addColorStop(.4, `hsla(${(wh.hue+60)%360},100%,75%,.8)`);
+      armGrad.addColorStop(1, `hsla(${(wh.hue+120)%360},100%,60%,.0)`);
+      ctx.strokeStyle = armGrad;
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let t = 0; t <= 1; t += 0.04) {
+        const spiralR = r * t;
+        const spiralA = t * Math.PI * 2.5;
+        const px = Math.cos(spiralA) * spiralR * 0.6;
+        const py = Math.sin(spiralA) * spiralR;
+        t === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Dark void centre
+    ctx.globalAlpha = eased * 0.92;
+    ctx.save(); ctx.globalCompositeOperation = 'destination-out';
+    const voidGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.55);
+    voidGrad.addColorStop(0, 'rgba(0,0,0,1)');
+    voidGrad.addColorStop(0.7, 'rgba(0,0,0,0.8)');
+    voidGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = voidGrad; ctx.beginPath(); ctx.arc(0, 0, r * 0.55, 0, PI2); ctx.fill();
+    ctx.restore();
+
+    // Inner glow
+    ctx.globalAlpha = eased * 0.6;
+    ctx.globalCompositeOperation = 'lighter';
+    const innerGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.45);
+    innerGlow.addColorStop(0, `hsla(${(wh.hue+180)%360},100%,90%,.9)`);
+    innerGlow.addColorStop(.5, `hsla(${wh.hue},100%,65%,.4)`);
+    innerGlow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = innerGlow; ctx.beginPath(); ctx.arc(0, 0, r * 0.45, 0, PI2); ctx.fill();
+
+    ctx.restore();
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  }
+
   _dDustMotes(ctx, w, h) {
     ctx.save(); ctx.globalCompositeOperation=this._isDark?'lighter':'source-over';
     const light=!this._isDark, m=light?2.2:2.8;
@@ -1492,7 +1912,7 @@ class WormWeatherCard extends HTMLElement {
       zoom_level:7, radar_opacity:0.7, animation_speed:600,
       auto_animate:true, temp_unit:'°C', wind_unit:'km/h',
       show_hourly:true, show_daily:true, show_details:true, compact_height:160,
-      show_wind_on_compact:false,
+      show_wind_on_compact:false, scifi_effects:true,
     }, c);
     this._zoom = parseInt(this._cfg.zoom_level) || 7;
     this._expanded = (this._cfg.default_view || 'compact') !== 'compact';
@@ -1795,7 +2215,7 @@ class WormWeatherCard extends HTMLElement {
     // Update canvas animation state
     if (this._atm) {
       const isNight = cond === 'clear-night' || (this._hass && this._hass.states['sun.sun']?.state === 'below_horizon');
-      this._atm.update(cond || 'cloudy', isNight, this._isDarkMode());
+      this._atm.update(cond || 'cloudy', isNight, this._isDarkMode(), this._cfg.scifi_effects !== false);
     }
   }
 
@@ -1811,8 +2231,9 @@ class WormWeatherCard extends HTMLElement {
       const st  = this._hass && eid && this._hass.states[eid];
       const cond = st ? (st.state || 'cloudy') : 'cloudy';
       const isNight = cond === 'clear-night' || (this._hass && this._hass.states['sun.sun']?.state === 'below_horizon');
+      const scifi = this._cfg.scifi_effects !== false;
       if (!this._atm) this._atm = new AtmCanvas(cv);
-      this._atm.init(cond, isNight, this._isDarkMode(), w, h);
+      this._atm.init(cond, isNight, this._isDarkMode(), w, h, scifi);
       this._atm.start();
     });
   }
@@ -2306,6 +2727,11 @@ class WormWeatherCardEditor extends HTMLElement {
       <div class="row-info"><div class="row-label">Wind Speed on Mini Card</div><div class="row-sub">Show wind speed below condition</div></div>
       <div class="row-ctrl">${this._tog('tog-windcmp', c.show_wind_on_compact===true)}</div>
     </div>
+    <div class="row">
+      <div class="row-icon" style="background:rgba(180,80,255,0.12)">${ico('mdi:ufo',16,'color:#B450FF')}</div>
+      <div class="row-info"><div class="row-label">Sci-Fi Effects</div><div class="row-sub">UFO · Enterprise · Whale · Wormhole</div></div>
+      <div class="row-ctrl">${this._tog('tog-scifi', c.scifi_effects!==false)}</div>
+    </div>
   </div></div>
 
 </div>`;
@@ -2332,6 +2758,7 @@ class WormWeatherCardEditor extends HTMLElement {
     const ta=s.getElementById('tog-anim');if(ta)ta.checked=c.auto_animate!==false;
     const tdt=s.getElementById('tog-details');if(tdt)tdt.checked=c.show_details!==false;
     const twc=s.getElementById('tog-windcmp');if(twc)twc.checked=c.show_wind_on_compact===true;
+    const tsc=s.getElementById('tog-scifi');if(tsc)tsc.checked=c.scifi_effects!==false;
     // Update seg opts
     s.querySelectorAll('[data-seg="temp_unit"]').forEach(el=>el.classList.toggle('on',el.dataset.val===(c.temp_unit||'°C')));
     // Update postcode display
@@ -2364,6 +2791,7 @@ class WormWeatherCardEditor extends HTMLElement {
     s.getElementById('tog-anim')?.addEventListener('change', e => this._updateConfig('auto_animate', e.target.checked));
     s.getElementById('tog-details')?.addEventListener('change', e => this._updateConfig('show_details', e.target.checked));
     s.getElementById('tog-windcmp')?.addEventListener('change', e => this._updateConfig('show_wind_on_compact', e.target.checked));
+    s.getElementById('tog-scifi')?.addEventListener('change', e => this._updateConfig('scifi_effects', e.target.checked));
     // Segmented controls
     s.querySelectorAll('[data-seg]').forEach(el => el.addEventListener('click', () => {
       const key = el.dataset.seg, val = el.dataset.val;
