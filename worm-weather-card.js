@@ -164,8 +164,8 @@ class AtmCanvas {
     this._aurora       = null;
     this._birdTimer = 0; this._planeTimer = 0; this._ufoTimer = 0;
     this._enterpriseTimer = 0; this._whaleTimer = 0; this._wormholeTimer = 0;
-    // Sci-fi mode flag (set from card config)
-    this._scifi = true;
+    // Sci-fi individual flags
+    this._scifiUFO=true; this._scifiEnterprise=true; this._scifiWhale=true; this._scifiWormhole=true;
     // State
     this._cond = 'sunny'; this._isNight = false; this._isDark = true;
     this._w = 0; this._h = 0;
@@ -176,18 +176,21 @@ class AtmCanvas {
   }
 
   /* ── Public API ──────────────────────────────────────────────── */
-  init(cond, isNight, isDark, w, h, scifi = true) {
+  init(cond, isNight, isDark, w, h, sf = {}) {
     this._cond = cond || 'cloudy';
-    this._isNight = !!isNight; this._isDark = !!isDark; this._scifi = !!scifi;
+    this._isNight = !!isNight; this._isDark = !!isDark;
+    this._scifiUFO=sf.ufo!==false; this._scifiEnterprise=sf.enterprise!==false; this._scifiWhale=sf.whale!==false; this._scifiWormhole=sf.wormhole!==false;
     this._w = w; this._h = h;
     this._cv.width = w; this._cv.height = h;
     this._ctx = this._cv.getContext('2d');
     this._build();
   }
 
-  update(cond, isNight, isDark, scifi = true) {
-    const ch = this._cond !== cond || this._isNight !== !!isNight || this._isDark !== !!isDark || this._scifi !== !!scifi;
-    this._cond = cond; this._isNight = !!isNight; this._isDark = !!isDark; this._scifi = !!scifi;
+  update(cond, isNight, isDark, sf = {}) {
+    const nu=sf.ufo!==false, ne=sf.enterprise!==false, nwh=sf.whale!==false, nwo=sf.wormhole!==false;
+    const ch = this._cond !== cond || this._isNight !== !!isNight || this._isDark !== !!isDark || this._scifiUFO!==nu || this._scifiEnterprise!==ne || this._scifiWhale!==nwh || this._scifiWormhole!==nwo;
+    this._cond = cond; this._isNight = !!isNight; this._isDark = !!isDark;
+    this._scifiUFO=nu; this._scifiEnterprise=ne; this._scifiWhale=nwh; this._scifiWormhole=nwo;
     if (ch) this._build();
   }
 
@@ -453,7 +456,7 @@ class AtmCanvas {
     const ctx=this._ctx; if(!ctx) return;
     const w=this._w, h=this._h, c=this._cond;
     this._frame++; this._gustPh+=.008; this._sunPh+=.006; this._moonPh+=.003; this._shimmerPh+=.018;
-    if (this._scifi) {
+    if (this._scifiWormhole) {
       this._wormholeTimer++;
       if (!this._wormhole && this._wormholeTimer > 600 && Math.random() < .0008) {
         this._wormholeTimer = 0;
@@ -478,7 +481,7 @@ class AtmCanvas {
     this._dUFO(ctx,w,h);
     this._dEnterprise(ctx,w,h);
     this._dWhale(ctx,w,h);
-    if (this._wormhole) this._dWormhole(ctx,w,h);
+    if (this._scifiWormhole && this._wormhole) this._dWormhole(ctx,w,h);
     // Foreground clouds (layer 3) drawn on top — UFO passes behind these
     if (this._clouds.length)  this._dClouds(ctx,w,h, 3, 3);
     if (this._dustMotes.length&&!this._isNight) this._dDustMotes(ctx,w,h);
@@ -947,7 +950,7 @@ class AtmCanvas {
   }
 
   _dUFO(ctx, w, h) {
-    if (!this._scifi) return;
+    if (!this._scifiUFO) return;
     this._ufoTimer++;
     if (this._ufos.length === 0 && this._ufoTimer > 480 && Math.random() < .0015) {
       this._ufoTimer = 0;
@@ -1104,7 +1107,7 @@ class AtmCanvas {
   }
 
   _dEnterprise(ctx, w, h) {
-    if (!this._scifi) return;
+    if (!this._scifiEnterprise) return;
     this._enterpriseTimer++;
     if (this._enterprise.length === 0 && this._enterpriseTimer > 520 && Math.random() < .0014) {
       this._enterpriseTimer = 0;
@@ -1239,7 +1242,7 @@ class AtmCanvas {
   }
 
   _dWhale(ctx, w, h) {
-    if (!this._scifi) return;
+    if (!this._scifiWhale) return;
     this._whaleTimer++;
     if (this._whales.length === 0 && this._whaleTimer > 550 && Math.random() < .0013) {
       this._whaleTimer = 0;
@@ -1931,7 +1934,8 @@ class WormWeatherCard extends HTMLElement {
       zoom_level:7, radar_opacity:0.7, animation_speed:600,
       auto_animate:true, temp_unit:'°C', wind_unit:'km/h',
       show_hourly:true, show_daily:true, show_details:true, compact_height:160,
-      show_wind_on_compact:false, scifi_effects:true,
+      show_wind_on_compact:false,
+      scifiUFO:true, scifiEnterprise:true, scifiWhale:true, scifiWormhole:true,
     }, c);
     this._zoom = parseInt(this._cfg.zoom_level) || 7;
     this._expanded = (this._cfg.default_view || 'compact') !== 'compact';
@@ -2234,7 +2238,7 @@ class WormWeatherCard extends HTMLElement {
     // Update canvas animation state
     if (this._atm) {
       const isNight = cond === 'clear-night' || (this._hass && this._hass.states['sun.sun']?.state === 'below_horizon');
-      this._atm.update(cond || 'cloudy', isNight, this._isDarkMode(), this._cfg.scifi_effects !== false);
+      this._atm.update(cond || 'cloudy', isNight, this._isDarkMode(), {ufo:this._cfg.scifiUFO!==false, enterprise:this._cfg.scifiEnterprise!==false, whale:this._cfg.scifiWhale!==false, wormhole:this._cfg.scifiWormhole!==false});
     }
   }
 
@@ -2250,9 +2254,9 @@ class WormWeatherCard extends HTMLElement {
       const st  = this._hass && eid && this._hass.states[eid];
       const cond = st ? (st.state || 'cloudy') : 'cloudy';
       const isNight = cond === 'clear-night' || (this._hass && this._hass.states['sun.sun']?.state === 'below_horizon');
-      const scifi = this._cfg.scifi_effects !== false;
+      const sf = {ufo:this._cfg.scifiUFO!==false, enterprise:this._cfg.scifiEnterprise!==false, whale:this._cfg.scifiWhale!==false, wormhole:this._cfg.scifiWormhole!==false};
       if (!this._atm) this._atm = new AtmCanvas(cv);
-      this._atm.init(cond, isNight, this._isDarkMode(), w, h, scifi);
+      this._atm.init(cond, isNight, this._isDarkMode(), w, h, sf);
       this._atm.start();
     });
   }
@@ -2748,8 +2752,23 @@ class WormWeatherCardEditor extends HTMLElement {
     </div>
     <div class="row">
       <div class="row-icon" style="background:rgba(180,80,255,0.12)">${ico('mdi:ufo',16,'color:#B450FF')}</div>
-      <div class="row-info"><div class="row-label">Sci-Fi Effects</div><div class="row-sub">UFO · Enterprise · Whale · Wormhole</div></div>
-      <div class="row-ctrl">${this._tog('tog-scifi', c.scifi_effects!==false)}</div>
+      <div class="row-info"><div class="row-label">UFO</div><div class="row-sub">Alien saucer with waving alien</div></div>
+      <div class="row-ctrl">${this._tog('tog-scifi-ufo', c.scifiUFO!==false)}</div>
+    </div>
+    <div class="row">
+      <div class="row-icon" style="background:rgba(180,80,255,0.12)">${ico('mdi:rocket-launch',16,'color:#B450FF')}</div>
+      <div class="row-info"><div class="row-label">USS Enterprise</div><div class="row-sub">NCC-1701 warping through the sky</div></div>
+      <div class="row-ctrl">${this._tog('tog-scifi-enterprise', c.scifiEnterprise!==false)}</div>
+    </div>
+    <div class="row">
+      <div class="row-icon" style="background:rgba(180,80,255,0.12)">${ico('mdi:fish',16,'color:#B450FF')}</div>
+      <div class="row-info"><div class="row-label">Whale And Petunias</div><div class="row-sub">A Hitchhiker's Guide To The Galaxy tribute</div></div>
+      <div class="row-ctrl">${this._tog('tog-scifi-whale', c.scifiWhale!==false)}</div>
+    </div>
+    <div class="row">
+      <div class="row-icon" style="background:rgba(180,80,255,0.12)">${ico('mdi:circle-double',16,'color:#B450FF')}</div>
+      <div class="row-info"><div class="row-label">Stargate</div><div class="row-sub">SG-1 Kawoosh Wormhole</div></div>
+      <div class="row-ctrl">${this._tog('tog-scifi-wormhole', c.scifiWormhole!==false)}</div>
     </div>
   </div></div>
 
@@ -2777,7 +2796,10 @@ class WormWeatherCardEditor extends HTMLElement {
     const ta=s.getElementById('tog-anim');if(ta)ta.checked=c.auto_animate!==false;
     const tdt=s.getElementById('tog-details');if(tdt)tdt.checked=c.show_details!==false;
     const twc=s.getElementById('tog-windcmp');if(twc)twc.checked=c.show_wind_on_compact===true;
-    const tsc=s.getElementById('tog-scifi');if(tsc)tsc.checked=c.scifi_effects!==false;
+    const ts1=s.getElementById('tog-scifi-ufo');if(ts1)ts1.checked=c.scifiUFO!==false;
+    const ts2=s.getElementById('tog-scifi-enterprise');if(ts2)ts2.checked=c.scifiEnterprise!==false;
+    const ts3=s.getElementById('tog-scifi-whale');if(ts3)ts3.checked=c.scifiWhale!==false;
+    const ts4=s.getElementById('tog-scifi-wormhole');if(ts4)ts4.checked=c.scifiWormhole!==false;
     // Update seg opts
     s.querySelectorAll('[data-seg="temp_unit"]').forEach(el=>el.classList.toggle('on',el.dataset.val===(c.temp_unit||'°C')));
     // Update postcode display
@@ -2810,7 +2832,10 @@ class WormWeatherCardEditor extends HTMLElement {
     s.getElementById('tog-anim')?.addEventListener('change', e => this._updateConfig('auto_animate', e.target.checked));
     s.getElementById('tog-details')?.addEventListener('change', e => this._updateConfig('show_details', e.target.checked));
     s.getElementById('tog-windcmp')?.addEventListener('change', e => this._updateConfig('show_wind_on_compact', e.target.checked));
-    s.getElementById('tog-scifi')?.addEventListener('change', e => this._updateConfig('scifi_effects', e.target.checked));
+    s.getElementById('tog-scifi-ufo')?.addEventListener('change', e => this._updateConfig('scifiUFO', e.target.checked));
+    s.getElementById('tog-scifi-enterprise')?.addEventListener('change', e => this._updateConfig('scifiEnterprise', e.target.checked));
+    s.getElementById('tog-scifi-whale')?.addEventListener('change', e => this._updateConfig('scifiWhale', e.target.checked));
+    s.getElementById('tog-scifi-wormhole')?.addEventListener('change', e => this._updateConfig('scifiWormhole', e.target.checked));
     // Segmented controls
     s.querySelectorAll('[data-seg]').forEach(el => el.addEventListener('click', () => {
       const key = el.dataset.seg, val = el.dataset.val;
