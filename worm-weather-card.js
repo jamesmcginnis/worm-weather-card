@@ -1119,22 +1119,16 @@ class AtmCanvas {
       const angle = Math.atan2(e.vy, e.vx);
       const perpX = -Math.sin(angle) * 9 * e.sc;
       const perpY =  Math.cos(angle) * 9 * e.sc;
-      e.trail.push({ x1: e.x + perpX, y1: e.y + perpY, x2: e.x - perpX, y2: e.y - perpY, age: 0 });
+      e.trail.push({ x1: e.x + perpX, y1: e.y + perpY, x2: e.x - perpX, y2: e.y - perpY });
       if (e.trail.length > 38) e.trail.shift();
 
-      ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(angle);
-      const sc = e.sc;
-
-      // Nacelle warp trails (drawn behind ship)
-      for (const pt of e.trail) pt.age++;
-      ctx.save();
-      ctx.translate(-e.x, -e.y); // undo translate so trail uses absolute coords
+      // Draw nacelle warp trails FIRST (in world space, before ship rotation is applied)
       for (let t = 1; t < e.trail.length; t++) {
         const alpha = (t / e.trail.length) * 0.55;
         const thinning = t / e.trail.length;
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = `hsl(${200 + t * 2},100%,${75 - t}%)`;
-        ctx.lineWidth = thinning * 2.2 * sc;
+        ctx.lineWidth = thinning * 2.2 * e.sc;
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(e.trail[t-1].x1, e.trail[t-1].y1);
@@ -1145,8 +1139,11 @@ class AtmCanvas {
         ctx.lineTo(e.trail[t].x2,   e.trail[t].y2);
         ctx.stroke();
       }
-      ctx.restore();
       ctx.globalAlpha = 1;
+
+      // Now draw ship on top, rotated to flight angle
+      ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(angle);
+      const sc = e.sc;
 
       // Primary hull (saucer section)
       const saucerGrad = ctx.createRadialGradient(-2*sc, -1*sc, 0, 0, 0, 18*sc);
@@ -1259,32 +1256,6 @@ class AtmCanvas {
       ctx.save(); ctx.translate(pt.x, pt.y); ctx.rotate(pt.rot);
       const psc = (wh.sc * 0.55);
 
-      // Thought bubble for petunia — "Oh no, not again."
-      if (pt.bubbleOp > 0.1) {
-        ctx.globalAlpha = Math.min(1, pt.bubbleOp * 0.85);
-        ctx.fillStyle = dark ? 'rgba(240,245,255,0.92)' : 'rgba(255,255,255,0.95)';
-        ctx.strokeStyle = dark ? 'rgba(180,195,220,0.5)' : 'rgba(160,175,200,0.6)';
-        ctx.lineWidth = 0.8;
-        // Bubble dots (above and left, since bowl is small)
-        for (const [dx,dy,r] of [[-18,-20,2.5],[-22,-27,3.5],[-28,-36,5.5]]) {
-          ctx.beginPath(); ctx.arc(dx*psc, dy*psc, r, 0, PI2);
-          ctx.fill(); ctx.stroke();
-        }
-        // Main bubble
-        if (ctx.roundRect) ctx.roundRect(-70*psc,-62*psc,78*psc,22*psc,6*psc);
-        else ctx.ellipse(-31*psc,-51*psc,40*psc,11*psc,0,0,PI2);
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(-70*psc,-62*psc,78*psc,22*psc,6*psc);
-        else ctx.ellipse(-31*psc,-51*psc,40*psc,11*psc,0,0,PI2);
-        ctx.fill(); ctx.stroke();
-        ctx.globalAlpha = pt.bubbleOp * 0.9;
-        ctx.fillStyle = dark?'rgba(30,35,50,1)':'rgba(20,25,40,1)';
-        ctx.font = `${Math.round(6.5*psc)}px -apple-system,sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.fillText('Oh no, not again.', -31*psc, -46*psc);
-        ctx.globalAlpha = 1; ctx.textAlign = 'left';
-      }
-
       // Bowl — terracotta pot shape
       ctx.fillStyle = dark?'rgba(180,90,55,1)':'rgba(195,100,65,1)';
       ctx.beginPath();
@@ -1325,28 +1296,6 @@ class AtmCanvas {
       const sc = wh.sc;
       ctx.save(); ctx.translate(wh.x, wh.y);
 
-      // Whale thought bubble
-      if (wh.bubbleOp > 0.1) {
-        ctx.globalAlpha = Math.min(1, wh.bubbleOp * 0.85);
-        ctx.fillStyle = dark ? 'rgba(240,245,255,0.92)' : 'rgba(255,255,255,0.95)';
-        ctx.strokeStyle = dark ? 'rgba(180,195,220,0.5)' : 'rgba(160,175,200,0.6)';
-        ctx.lineWidth = 0.8;
-        for (const [dx,dy,r] of [[38*sc,-52*sc,3],[43*sc,-60*sc,4.5],[50*sc,-72*sc,7]]) {
-          ctx.beginPath(); ctx.arc(dx, dy, r, 0, PI2); ctx.fill(); ctx.stroke();
-        }
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(38*sc,-110*sc,90*sc,32*sc,8*sc);
-        else ctx.ellipse(83*sc,-94*sc,46*sc,17*sc,0,0,PI2);
-        ctx.fill(); ctx.stroke();
-        ctx.globalAlpha = wh.bubbleOp * 0.9;
-        ctx.fillStyle = dark?'rgba(30,35,50,1)':'rgba(20,25,40,1)';
-        ctx.font = `${Math.round(7*sc)}px -apple-system,sans-serif`;
-        ctx.textAlign = 'center';
-        const tIdx = Math.floor(wh.bubbleTimer / 90) % whaleThoughts.length;
-        ctx.fillText(whaleThoughts[tIdx], 83*sc, -89*sc);
-        ctx.globalAlpha = 1; ctx.textAlign = 'left';
-      }
-
       // Body
       const bodyGrad = ctx.createRadialGradient(-8*sc,-4*sc,0,0,0,32*sc);
       bodyGrad.addColorStop(0,  dark?'rgba(90,115,145,1)':'rgba(100,130,160,1)');
@@ -1371,15 +1320,15 @@ class AtmCanvas {
       ctx.beginPath(); ctx.arc(24*sc,-4*sc,2.8*sc,0,PI2); ctx.fill();
       ctx.fillStyle = 'rgba(20,20,30,1)';
       ctx.beginPath(); ctx.arc(24.5*sc,-4*sc,1.4*sc,0,PI2); ctx.fill();
-      // Tail
-      const fluke = Math.sin(wh.tailPh) * 0.38;
+      // Tail — gentle slow wag (both flukes sweep together side to side)
+      const wag = Math.sin(wh.tailPh * 0.4) * 0.18; // slow, small angle
       ctx.fillStyle = dark?'rgba(55,75,100,1)':'rgba(65,88,115,1)';
       for (const side of [-1,1]) {
-        ctx.save(); ctx.translate(-30*sc,side*3*sc); ctx.rotate(fluke*side);
+        ctx.save(); ctx.translate(-30*sc, side*3*sc); ctx.rotate(wag); // same direction, no *side
         ctx.beginPath();
         ctx.moveTo(0,0);
-        ctx.bezierCurveTo(-8*sc,side*2*sc,-16*sc,side*10*sc,-22*sc,side*8*sc);
-        ctx.bezierCurveTo(-18*sc,side*4*sc,-10*sc,0,0,0);
+        ctx.bezierCurveTo(-8*sc, side*2*sc, -16*sc, side*10*sc, -22*sc, side*8*sc);
+        ctx.bezierCurveTo(-18*sc, side*4*sc, -10*sc, 0, 0, 0);
         ctx.fill(); ctx.restore();
       }
       ctx.restore();
@@ -1429,42 +1378,6 @@ class AtmCanvas {
 
     ctx.save();
     ctx.translate(wh.x, wh.y);
-
-    // Outer distortion rings
-    for (let ring = 5; ring >= 1; ring--) {
-      const rr = r * (0.6 + ring * 0.12);
-      const op = (1 - ring / 6) * 0.35 * eased;
-      ctx.globalAlpha = op;
-      ctx.beginPath(); ctx.arc(0, 0, rr, 0, PI2);
-      ctx.strokeStyle = `hsla(${(wh.hue + ring * 25) % 360},90%,65%,1)`;
-      ctx.lineWidth = 2.5 - ring * 0.3;
-      ctx.stroke();
-    }
-
-    // Swirling spiral arms (6 arms rotating)
-    ctx.globalAlpha = 0.7 * eased;
-    for (let arm = 0; arm < 6; arm++) {
-      const armAngle = (arm / 6) * PI2 + wh.spin;
-      ctx.save();
-      ctx.rotate(armAngle);
-      const armGrad = ctx.createLinearGradient(0, 0, r, 0);
-      armGrad.addColorStop(0, `hsla(${wh.hue},100%,80%,.0)`);
-      armGrad.addColorStop(.4, `hsla(${(wh.hue+60)%360},100%,75%,.8)`);
-      armGrad.addColorStop(1, `hsla(${(wh.hue+120)%360},100%,60%,.0)`);
-      ctx.strokeStyle = armGrad;
-      ctx.lineWidth = 3;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      for (let t = 0; t <= 1; t += 0.04) {
-        const spiralR = r * t;
-        const spiralA = t * Math.PI * 2.5;
-        const px = Math.cos(spiralA) * spiralR * 0.6;
-        const py = Math.sin(spiralA) * spiralR;
-        t === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-      }
-      ctx.stroke();
-      ctx.restore();
-    }
 
     // Dark void centre
     ctx.globalAlpha = eased * 0.92;
