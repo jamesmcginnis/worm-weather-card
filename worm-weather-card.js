@@ -1315,15 +1315,15 @@ class AtmCanvas {
       if (b.beamOp > 0.01) {
         ctx.save();
         ctx.globalAlpha = b.beamOp * 0.6;
-        // Beam fans from full cube width at top down to sun/moon disc width at bottom
-        const beamTopHalf = half;              // full cube width at origin
-        const beamBotHalf = 26 * sc;          // wide enough to envelope the sun/moon disc
+        // Cone: narrow at cube base, widens to cover the full sun/moon disc
+        const beamTopHalf = half * 0.18;       // narrow exit point at cube underside
+        const beamBotHalf = 30 * sc;           // wide cone at target, covers sun/moon disc
         const byTop = b.y + half;
         const byBot = b.ty;
         const beamGrad = ctx.createLinearGradient(b.x, byTop, b.x, byBot);
-        beamGrad.addColorStop(0,   'rgba(0,255,80,0.85)');
-        beamGrad.addColorStop(0.4, 'rgba(0,230,70,0.55)');
-        beamGrad.addColorStop(1,   'rgba(0,200,55,0.15)');
+        beamGrad.addColorStop(0,   'rgba(0,255,80,0.90)');
+        beamGrad.addColorStop(0.35,'rgba(0,230,70,0.65)');
+        beamGrad.addColorStop(1,   'rgba(0,200,55,0.20)');
         ctx.fillStyle = beamGrad;
         ctx.beginPath();
         ctx.moveTo(b.x - beamTopHalf, byTop);
@@ -1331,14 +1331,14 @@ class AtmCanvas {
         ctx.lineTo(b.tx + beamBotHalf, byBot);
         ctx.lineTo(b.tx - beamBotHalf, byBot);
         ctx.closePath(); ctx.fill();
-        // Wide green glow covering the sun/moon disc
+        // Wide green glow at the target covering the sun/moon disc
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = b.beamOp * 0.45;
         const glowR = 34 * sc;
         const tg = ctx.createRadialGradient(b.tx, b.ty, 0, b.tx, b.ty, glowR);
-        tg.addColorStop(0, 'rgba(0,255,80,0.9)');
-        tg.addColorStop(0.5,'rgba(0,200,60,0.4)');
-        tg.addColorStop(1, 'rgba(0,255,80,0)');
+        tg.addColorStop(0,   'rgba(0,255,80,0.9)');
+        tg.addColorStop(0.5, 'rgba(0,200,60,0.4)');
+        tg.addColorStop(1,   'rgba(0,255,80,0)');
         ctx.fillStyle = tg;
         ctx.beginPath(); ctx.arc(b.tx, b.ty, glowR, 0, PI2); ctx.fill();
         ctx.restore();
