@@ -1093,8 +1093,8 @@ class AtmCanvas {
     this._enterprise.push({
       x: goRight ? -160 : w + 160,
       y: h * (.18 + Math.random() * .35),
-      vx: dir * (1.8 + Math.random() * 0.8),
-      vy: -(0.55 + Math.random() * 0.35), // angles upward toward space
+      vx: dir * (0.9 + Math.random() * 0.4),    // slower entry
+      vy: -(0.08 + Math.random() * 0.06),         // barely tilted at first
       trail: [], // nacelle warp trail points
       sc: 0.55 + Math.random() * 0.3,
       dir,
@@ -1113,9 +1113,8 @@ class AtmCanvas {
     for (let i = this._enterprise.length - 1; i >= 0; i--) {
       const e = this._enterprise[i];
       e.x += e.vx; e.y += e.vy; e.lightPh += .09;
-      // Gradually accelerate — warping out
-      e.vx += e.dir * 0.04;
-      e.vy -= 0.012;
+      e.vx += e.dir * 0.018;   // gradual horizontal acceleration
+      e.vy -= 0.004;            // very gently steepening climb angle
       // Store nacelle trail positions (two nacelles offset from hull)
       const angle = Math.atan2(e.vy, e.vx);
       const perpX = -Math.sin(angle) * 9 * e.sc;
@@ -1210,7 +1209,7 @@ class AtmCanvas {
     this._whales.push({
       x,
       y: -60,
-      vy: 0.9 + Math.random() * 0.5,
+      vy: 0.4 + Math.random() * 0.2,   // start slower
       tailPh: 0,
       sc: 0.65 + Math.random() * 0.3,
       bubbleOp: 0,
@@ -1219,7 +1218,7 @@ class AtmCanvas {
       petunia: {
         x: x + (Math.random() > 0.5 ? 1 : -1) * (55 + Math.random() * 30),
         y: -30,
-        vy: 0.55 + Math.random() * 0.25,   // slower than whale
+        vy: 0.28 + Math.random() * 0.14,   // slower than whale
         rot: Math.random() * Math.PI * 2,
         rotV: (Math.random() - 0.5) * 0.04,
         bubbleOp: 0,
@@ -1243,14 +1242,14 @@ class AtmCanvas {
       const pt = wh.petunia;
 
       // ── Whale physics ──
-      wh.vy = Math.min(wh.vy + 0.04, 4.2);
+      wh.vy = Math.min(wh.vy + 0.012, 1.8); // slow gentle fall
       wh.y += wh.vy;
       wh.tailPh += 0.10;
       wh.bubbleTimer++;
       if (wh.bubbleTimer > 20) wh.bubbleOp = Math.min(1, wh.bubbleOp + 0.05);
 
       // ── Petunia physics (slightly slower) ──
-      pt.vy = Math.min(pt.vy + 0.03, 3.2);
+      pt.vy = Math.min(pt.vy + 0.008, 1.3); // petunia slower
       pt.y += pt.vy;
       pt.rot += pt.rotV;
       pt.bubbleTimer++;
@@ -1399,7 +1398,7 @@ class AtmCanvas {
       progress: 0,      // 0→1 for open/close
       holdTimer: 0,
       holdDuration: 120 + Math.floor(Math.random() * 80),
-      maxR: 28 + Math.random() * 18,
+      maxR: 18 + Math.random() * 10,
       spin: 0,
       hue: Math.floor(Math.random() * 360),
     };
