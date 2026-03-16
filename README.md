@@ -25,11 +25,12 @@ Without that project, this card would not exist in anything close to its current
 ## ✨ Features
 
 - **Animated atmospheric canvas** — condition-accurate sky with birds, aurora, shooting stars, comets, planes with contrails, dust motes, heat shimmer, rain, snow, lightning and more
-- **Live radar map** — powered by [RainViewer](https://www.rainviewer.com/), with smooth crossfade animation and a vivid TITAN colour scheme
-- **Forecast tab** — day tabs with hourly breakdown per day; tap any day to see that day's hourly forecast
+- **Depth-layered volumetric clouds** — multi-puff organic clouds with rim highlights, parallax movement and lightning flash response
+- **Sci-Fi Effects** — occasional surprise visitors including a UFO with a waving alien, the USS Enterprise swooping toward warp, a sperm whale and accompanying bowl of petunias falling from the sky (with appropriate thoughts), and a swirling wormhole that opens and closes
+- **Live radar map** — powered by [RainViewer](https://www.rainviewer.com/), continuously animating the past ~2 hours of precipitation with smooth crossfade between frames and a vivid TITAN colour scheme. Pinch and scroll to zoom, drag to pan
+- **Forecast tab** — scrollable day tabs with hourly breakdown; tap any day to see that day's hourly forecast
 - **Weather tab** — compact current conditions with hourly strip and condition tiles (humidity, wind, pressure, UV, visibility, dew point, cloud cover, precipitation)
-- **iOS-style visual editor** — configure everything without touching YAML
-- **Light theme animation** — mini card always renders the bright daytime Atmospheric Weather Card look
+- **Clean visual editor** — configure everything without touching YAML
 
 ---
 
@@ -37,10 +38,9 @@ Without that project, this card would not exist in anything close to its current
 
 ### HACS (recommended)
 
-1. Open HACS → Frontend → Custom Repositories
-2. Add `https://github.com/YOUR_USERNAME/worm-weather-card` as a **Lovelace** repository
-3. Install **Worm Weather Card**
-4. Reload your browser
+1. Click the blue **Open in HACS** button above
+2. Click **Download**
+3. Reload your browser
 
 ### Manual
 
@@ -63,25 +63,45 @@ type: custom:worm-weather-card
 weather_entity: weather.home
 postcode: HU1 1AB          # optional — centres the radar map
 country_code: GB            # optional — improves postcode geocoding
-accent_color: "#5AC8FA"     # optional — highlight colour
 temp_unit: "°C"             # °C or °F
 wind_unit: km/h             # km/h, mph or m/s
-default_view: compact       # compact, radar or weather
 compact_height: 160         # height of the mini card in pixels
 zoom_level: 7               # radar map default zoom (4–14)
 radar_opacity: 0.7          # 0.0–1.0
 animation_speed: 600        # milliseconds per radar frame
 auto_animate: true          # start radar animation automatically
-show_hourly: true           # hourly strip on Weather tab
 show_details: true          # condition tiles on Weather tab
 show_wind_on_compact: false # wind speed on mini card
+scifi_effects: true         # UFO, Enterprise, whale, wormhole
 ```
+
+---
+
+## 🌦️ Animations
+
+The card reads your weather entity condition and `sun.sun` to determine day or night, then renders the appropriate scene.
+
+| Condition | What you see |
+|---|---|
+| Sunny / Exceptional | Blue sky, pulsing sun with corona, dust motes, heat shimmer |
+| Partly Cloudy | Sky, sun, volumetric clouds |
+| Cloudy | Overcast clouds in multiple depth layers |
+| Rainy / Pouring | Dark clouds, visible rain streaks |
+| Snowy | Snow particles in three size tiers with wobble drift |
+| Thunderstorm | Storm clouds, lightning bolts with branches, sky flash |
+| Fog | Undulating fog banks |
+| Windy | Wind vapor streaks, stronger cloud movement |
+| Clear Night | Stars (240 twinkling), moon with craters, shooting stars, comets |
+| Any night | Moon, stars appropriate to cloud cover |
+| Any (rare) | Birds in V-formation, planes with contrails |
+| Aurora | 4% chance on clear/partly-cloudy dark nights |
+| Sci-Fi (optional) | UFO, USS Enterprise, whale + petunias, wormhole |
 
 ---
 
 ## 🗺️ Radar
 
-The radar layer is provided by [RainViewer](https://www.rainviewer.com/) and is free for personal use. The TITAN 2020 colour scheme is used for maximum contrast. Precipitation intensity runs from light green through yellow to deep red.
+The radar layer is provided by [RainViewer](https://www.rainviewer.com/) and is free for personal use. The TITAN 2020 colour scheme is used for maximum contrast — light green for drizzle through to deep red for heavy rain. The animation loops through approximately 12 frames covering the past two hours, plus a short nowcast.
 
 Postcode / ZIP geocoding is provided by the [Nominatim](https://nominatim.org/) service (OpenStreetMap). Without a postcode the map defaults to London.
 
