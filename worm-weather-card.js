@@ -944,7 +944,7 @@ class AtmCanvas {
     for (let i = this._ufos.length - 1; i >= 0; i--) {
       const u = this._ufos[i];
       u.lightPh += .08;
-      u.bobPh   += .025;
+      if (u.phase !== 'enter') u.bobPh += .025;
 
       if (u.phase === 'enter') {
         // Smooth ease-out: cubic easing so entry starts fast and settles gently
@@ -952,6 +952,7 @@ class AtmCanvas {
         if (u.enterProgress >= 1) {
           u.enterProgress = 1;
           u.phase = 'hover';
+          u.bobPh = 0; // reset so hover bob starts from exact hoverX/hoverY — no jump
         }
         const t = u.enterProgress;
         const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
