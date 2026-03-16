@@ -1091,14 +1091,15 @@ class AtmCanvas {
     const goRight = Math.random() > .5;
     const dir = goRight ? 1 : -1;
     this._enterprise.push({
-      x: goRight ? -160 : w + 160,
-      y: h * (.18 + Math.random() * .35),
-      vx: dir * (0.9 + Math.random() * 0.4),    // slower entry
-      vy: -(0.08 + Math.random() * 0.06),         // barely tilted at first
-      trail: [], // nacelle warp trail points
+      x: goRight ? -120 : w + 120,
+      y: h * (.25 + Math.random() * .35),
+      vx: dir * (0.7 + Math.random() * 0.3),   // slow steady cruise
+      vy: -(0.02 + Math.random() * 0.02),        // almost flat - barely tilted
+      trail: [],
       sc: 0.55 + Math.random() * 0.3,
       dir,
       lightPh: Math.random() * Math.PI * 2,
+      crossTimer: 0,   // track how long it's been on screen
     });
   }
 
@@ -1112,9 +1113,22 @@ class AtmCanvas {
     const PI2 = Math.PI * 2, dark = this._isDark;
     for (let i = this._enterprise.length - 1; i >= 0; i--) {
       const e = this._enterprise[i];
+      e.crossTimer++;
       e.x += e.vx; e.y += e.vy; e.lightPh += .09;
-      e.vx += e.dir * 0.018;   // gradual horizontal acceleration
-      e.vy -= 0.004;            // very gently steepening climb angle
+
+      // Cruise flat across most of the screen, then engage warp and climb away
+      // Only start climbing once it has crossed roughly 60% of the screen width
+      const crossProgress = Math.abs(e.x - e.startX || (e.dir > 0 ? -120 : w + 120)) / w;
+      const hasReachedMid = e.dir > 0 ? e.x > w * 0.55 : e.x < w * 0.45;
+      if (hasReachedMid) {
+        // Warp out: accelerate and climb steeply
+        e.vx += e.dir * 0.055;
+        e.vy -= 0.018;
+      } else {
+        // Cruise: very slight climb, constant speed
+        e.vx += e.dir * 0.004;
+        e.vy -= 0.001;
+      }
       // Store nacelle trail positions (two nacelles offset from hull)
       const angle = Math.atan2(e.vy, e.vx);
       const perpX = -Math.sin(angle) * 9 * e.sc;
@@ -1320,17 +1334,32 @@ class AtmCanvas {
       ctx.beginPath(); ctx.arc(24*sc,-4*sc,2.8*sc,0,PI2); ctx.fill();
       ctx.fillStyle = 'rgba(20,20,30,1)';
       ctx.beginPath(); ctx.arc(24.5*sc,-4*sc,1.4*sc,0,PI2); ctx.fill();
-      // Tail — gentle slow wag (both flukes sweep together side to side)
-      const wag = Math.sin(wh.tailPh * 0.4) * 0.18; // slow, small angle
+      // Tail — single horizontal fluke shape that sweeps side to side
+      const wag = Math.sin(wh.tailPh * 0.4) * 0.22;
       ctx.fillStyle = dark?'rgba(55,75,100,1)':'rgba(65,88,115,1)';
-      for (const side of [-1,1]) {
-        ctx.save(); ctx.translate(-30*sc, side*3*sc); ctx.rotate(wag); // same direction, no *side
-        ctx.beginPath();
-        ctx.moveTo(0,0);
-        ctx.bezierCurveTo(-8*sc, side*2*sc, -16*sc, side*10*sc, -22*sc, side*8*sc);
-        ctx.bezierCurveTo(-18*sc, side*4*sc, -10*sc, 0, 0, 0);
-        ctx.fill(); ctx.restore();
-      }
+      ctx.save();
+      ctx.translate(-30*sc, 0);
+      ctx.rotate(wag);
+      // Left fluke
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(-6*sc, -3*sc, -18*sc, -12*sc, -24*sc, -8*sc);
+      ctx.bezierCurveTo(-20*sc, -4*sc, -10*sc, 0, 0, 0);
+      ctx.fill();
+      // Right fluke (mirrored)
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(-6*sc, 3*sc, -18*sc, 12*sc, -24*sc, 8*sc);
+      ctx.bezierCurveTo(-20*sc, 4*sc, -10*sc, 0, 0, 0);
+      ctx.fill();
+      // Central notch between flukes
+      ctx.fillStyle = dark?'rgba(45,62,88,1)':'rgba(55,75,105,1)';
+      ctx.beginPath();
+      ctx.moveTo(-8*sc, -2*sc);
+      ctx.lineTo(-14*sc, 0);
+      ctx.lineTo(-8*sc, 2*sc);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
       ctx.restore();
 
       if (wh.y > h + 120) this._whales.splice(i, 1);
@@ -1342,61 +1371,139 @@ class AtmCanvas {
   _makeWormhole(w, h) {
     return {
       x: w * (.22 + Math.random() * .56),
-      y: h * (.12 + Math.random() * .45),
-      phase: 'open',    // open → hold → close
-      progress: 0,      // 0→1 for open/close
+      y: h * (.15 + Math.random() * .40),
+      phase: 'kawoosh',
+      progress: 0,
+      kawooshR: 0,
+      kawooshOp: 1,
       holdTimer: 0,
-      holdDuration: 120 + Math.floor(Math.random() * 80),
-      maxR: 18 + Math.random() * 10,
+      holdDuration: 150 + Math.floor(Math.random() * 80),
+      maxR: 22 + Math.random() * 10,
       spin: 0,
-      hue: Math.floor(Math.random() * 360),
+      ripples: [],
+      rippleTimer: 0,
     };
   }
 
   _dWormhole(ctx, w, h) {
     if (!this._wormhole) return;
-    const wh = this._wormhole;
-    wh.spin += 0.055;
+    const sg = this._wormhole;
+    sg.spin += 0.04;
+    sg.rippleTimer++;
     const PI2 = Math.PI * 2;
 
-    if (wh.phase === 'open') {
-      wh.progress = Math.min(1, wh.progress + 0.025);
-      if (wh.progress >= 1) wh.phase = 'hold';
-    } else if (wh.phase === 'hold') {
-      wh.holdTimer++;
-      if (wh.holdTimer >= wh.holdDuration) wh.phase = 'close';
-    } else {
-      wh.progress = Math.max(0, wh.progress - 0.020);
-      if (wh.progress <= 0) { this._wormhole = null; return; }
+    if (sg.phase === 'hold' && sg.rippleTimer % 18 === 0) {
+      sg.ripples.push({ r: 0, op: 0.8 });
+    }
+    for (let i = sg.ripples.length - 1; i >= 0; i--) {
+      sg.ripples[i].r  += 0.55;
+      sg.ripples[i].op *= 0.94;
+      if (sg.ripples[i].op < 0.04) sg.ripples.splice(i, 1);
     }
 
-    const eased = wh.progress < 0.5
-      ? 4 * wh.progress * wh.progress * wh.progress
-      : 1 - Math.pow(-2 * wh.progress + 2, 3) / 2;
-    const r = wh.maxR * eased;
-    if (r < 1) return;
+    if (sg.phase === 'kawoosh') {
+      sg.progress += 0.022;
+      sg.kawooshR = sg.maxR * 3.5 * sg.progress;
+      sg.kawooshOp = Math.max(0, 1 - sg.progress * 1.2);
+      if (sg.progress >= 1) { sg.phase = 'hold'; sg.progress = 1; }
+    } else if (sg.phase === 'hold') {
+      sg.holdTimer++;
+      if (sg.holdTimer >= sg.holdDuration) { sg.phase = 'close'; sg.progress = 1; }
+    } else {
+      sg.progress -= 0.018;
+      if (sg.progress <= 0) { this._wormhole = null; return; }
+    }
+
+    const eased = sg.phase === 'kawoosh'
+      ? Math.min(1, sg.progress * 1.8)
+      : sg.phase === 'hold' ? 1
+      : sg.progress * sg.progress;
+
+    const r = sg.maxR * eased;
+    if (r < 0.5) return;
 
     ctx.save();
-    ctx.translate(wh.x, wh.y);
+    ctx.translate(sg.x, sg.y);
 
-    // Dark void centre
+    // Kawoosh burst ring
+    if (sg.phase === 'kawoosh' && sg.kawooshOp > 0.02) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const kr = sg.kawooshR;
+      const kg = ctx.createRadialGradient(0, 0, kr * 0.5, 0, 0, kr);
+      kg.addColorStop(0,    'rgba(60,180,255,0)');
+      kg.addColorStop(0.6,  `rgba(80,220,255,${sg.kawooshOp * 0.7})`);
+      kg.addColorStop(0.85, `rgba(160,240,255,${sg.kawooshOp * 0.9})`);
+      kg.addColorStop(1,    'rgba(255,255,255,0)');
+      ctx.fillStyle = kg;
+      ctx.beginPath(); ctx.arc(0, 0, kr, 0, PI2); ctx.fill();
+      ctx.restore();
+    }
+
+    // Stone ring edge
+    ctx.globalAlpha = Math.min(1, eased * 1.4);
+    ctx.strokeStyle = 'rgba(140,155,170,0.85)';
+    ctx.lineWidth = r * 0.22;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.92, 0, PI2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(200,215,230,0.55)';
+    ctx.lineWidth = r * 0.06;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.80, 0, PI2); ctx.stroke();
+
+    // Chevron glyphs
+    ctx.globalAlpha = eased * 0.75;
+    for (let g = 0; g < 9; g++) {
+      const ga = (g / 9) * PI2 + sg.spin * 0.15;
+      const gx = Math.cos(ga) * r * 0.92;
+      const gy = Math.sin(ga) * r * 0.92;
+      const active = g % 3 === 0;
+      ctx.fillStyle = active ? 'rgba(255,200,60,0.9)' : 'rgba(180,195,210,0.55)';
+      ctx.save(); ctx.translate(gx, gy); ctx.rotate(ga + Math.PI/2);
+      ctx.beginPath();
+      ctx.moveTo(0, -r*0.07); ctx.lineTo(r*0.05, r*0.07); ctx.lineTo(-r*0.05, r*0.07);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+
+    // Blue liquid surface
     ctx.globalAlpha = eased * 0.92;
     ctx.save(); ctx.globalCompositeOperation = 'destination-out';
-    const voidGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.55);
-    voidGrad.addColorStop(0, 'rgba(0,0,0,1)');
-    voidGrad.addColorStop(0.7, 'rgba(0,0,0,0.8)');
-    voidGrad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = voidGrad; ctx.beginPath(); ctx.arc(0, 0, r * 0.55, 0, PI2); ctx.fill();
+    const baseG = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.78);
+    baseG.addColorStop(0, 'rgba(0,0,0,1)');
+    baseG.addColorStop(0.85, 'rgba(0,0,0,0.95)');
+    baseG.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = baseG;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.78, r * 0.78, 0, 0, PI2); ctx.fill();
     ctx.restore();
 
-    // Inner glow
-    ctx.globalAlpha = eased * 0.6;
-    ctx.globalCompositeOperation = 'lighter';
-    const innerGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.45);
-    innerGlow.addColorStop(0, `hsla(${(wh.hue+180)%360},100%,90%,.9)`);
-    innerGlow.addColorStop(.5, `hsla(${wh.hue},100%,65%,.4)`);
-    innerGlow.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = innerGlow; ctx.beginPath(); ctx.arc(0, 0, r * 0.45, 0, PI2); ctx.fill();
+    ctx.globalAlpha = eased * 0.88;
+    const surfG = ctx.createRadialGradient(0, r * 0.1, 0, 0, 0, r * 0.76);
+    surfG.addColorStop(0,    'rgba(30,180,255,0.95)');
+    surfG.addColorStop(0.45, 'rgba(10,130,220,0.85)');
+    surfG.addColorStop(0.80, 'rgba(5,80,170,0.65)');
+    surfG.addColorStop(1,    'rgba(0,40,120,0)');
+    ctx.fillStyle = surfG;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.76, r * 0.76, 0, 0, PI2); ctx.fill();
+
+    // Moving highlight
+    ctx.globalAlpha = eased * 0.35;
+    const sweepX = Math.cos(sg.spin * 0.8) * r * 0.3;
+    const sweepY = Math.sin(sg.spin * 0.8) * r * 0.2;
+    const hg = ctx.createRadialGradient(sweepX, sweepY, 0, sweepX, sweepY, r * 0.45);
+    hg.addColorStop(0, 'rgba(200,240,255,0.8)');
+    hg.addColorStop(1, 'rgba(200,240,255,0)');
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.76, r * 0.76, 0, 0, PI2); ctx.fill();
+
+    // Ripple rings
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.76, r * 0.76, 0, 0, PI2); ctx.clip();
+    for (const rp of sg.ripples) {
+      ctx.globalAlpha = rp.op * eased * 0.55;
+      ctx.strokeStyle = 'rgba(160,230,255,1)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.ellipse(0, 0, rp.r, rp.r * 0.5, 0, 0, PI2); ctx.stroke();
+    }
+    ctx.restore();
 
     ctx.restore();
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
