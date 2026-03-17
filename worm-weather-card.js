@@ -1270,11 +1270,6 @@ class AtmCanvas {
         ctx.restore();
       }
 
-      // Deflector dish glow
-      ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      const ddg = ctx.createRadialGradient(-20*sc, 4*sc, 0, -20*sc, 4*sc, 5*sc);
-      ddg.addColorStop(0, 'rgba(80,200,255,.7)'); ddg.addColorStop(1, 'rgba(80,200,255,0)');
-      ctx.fillStyle = ddg; ctx.beginPath(); ctx.arc(-20*sc, 4*sc, 5*sc, 0, PI2); ctx.fill();
       ctx.restore();
 
       ctx.restore();
