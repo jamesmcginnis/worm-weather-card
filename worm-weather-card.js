@@ -1663,16 +1663,20 @@ class AtmCanvas {
       this._abLaunchDelay--;
       if (this._abLaunchDelay <= 0) {
         const def = this._abQueue.shift();
+        const gravity = 0.072;
+        // Initial upward velocity derived from desired arc height: vy0 = -sqrt(2*g*arcHeight)
+        const vy0 = -Math.sqrt(2 * gravity * def.arcHeight);
         this._angryBirdFlock.push({
           x: def.startX, y: def.startY,
-          startX: def.startX, startY: def.startY, endX: def.endX,
-          totalDist: def.totalDist, speed: def.speed,
-          arcHeight: def.arcHeight, dir: def.dir,
-          sc: def.sc, type: def.type,
+          vx: def.speed * def.dir,
+          vy: vy0,
+          gravity,
+          startX: def.startX, endX: def.endX,
+          totalDist: def.totalDist,
+          sc: def.sc, type: def.type, dir: def.dir,
           progress: 0, rot: 0, trail: [], exploded: false,
           willExplode: def.willExplode,
         });
-        // Random gap before next bird: 55–130 frames — feels like slingshot reloading
         this._abLaunchDelay = 55 + Math.floor(Math.random() * 75);
         if (this._abQueue.length === 0) this._abQueue = null;
       }
@@ -1683,26 +1687,17 @@ class AtmCanvas {
     for (let i = this._angryBirdFlock.length - 1; i >= 0; i--) {
       const b = this._angryBirdFlock[i];
 
-      // Advance horizontal position
-      b.x += b.speed * b.dir;
+      // Real projectile physics
+      b.vy += b.gravity;
+      b.x  += b.vx;
+      b.y  += b.vy;
 
-      // Compute progress (0 → 1) across full crossing
+      // Progress for explosion trigger (based on x position)
       b.progress = Math.max(0, Math.min(1, Math.abs(b.x - b.startX) / b.totalDist));
-      const t = b.progress;
 
-      // Asymmetric parabola: peaks at t=0.28, rises fast then drops steeply like real gravity
-      const pk = 0.28;
-      const arc = t < pk
-        ? b.arcHeight * (t / pk)                        // quick rise to peak
-        : b.arcHeight * Math.pow((1 - t) / (1 - pk), 1.6); // steep curved drop
-      b.y = b.startY - arc;
-
-      // Rotation follows arc tangent — derivative of asymmetric parabola
-      const dy = t < pk
-        ? -b.arcHeight / pk
-        : b.arcHeight * 1.6 * Math.pow((1-t)/(1-pk), 0.6) / (1-pk);
-      const targetRot = Math.atan2(dy, b.speed * 60) * 0.55;
-      b.rot += (targetRot - b.rot) * 0.18;  // smooth interpolation, no snapping
+      // Rotation follows actual velocity vector — perfectly natural
+      const targetRot = Math.atan2(b.vy, Math.abs(b.vx));
+      b.rot += (targetRot - b.rot) * 0.22;
 
       // Store trail puff
       b.trail.push({x: b.x, y: b.y, op: 0.30});
@@ -1918,7 +1913,7 @@ class AtmCanvas {
         this._abExplosions.push({ x: b.x, y: b.y, vx:0, vy:0, life:1.0, size:28*b.sc, type:'flash' });
         // Remove the bird
         this._angryBirdFlock.splice(i, 1);
-      } else if (b.dir > 0 ? b.x > b.endX + 20 : b.x < b.endX - 20) {
+      } else if (b.x < -120 || b.x > w + 120 || b.y > h + 100) {
         this._angryBirdFlock.splice(i, 1);
       }
     }
