@@ -1652,7 +1652,7 @@ class AtmCanvas {
         sc: 0.48 + Math.random() * 0.30,
         startX, endX, totalDist, dir,
         startY:    h * (.12 + Math.random() * .52),
-        arcHeight: h * (0.08 + Math.random() * 0.22),
+        arcHeight: h * (0.05 + Math.random() * 0.13),
         speed:     1.4 + Math.random() * 1.2,
         willExplode: Math.random() < 0.45,
       }));
