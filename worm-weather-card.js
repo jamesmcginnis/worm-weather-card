@@ -1652,7 +1652,7 @@ class AtmCanvas {
         sc: 0.48 + Math.random() * 0.30,
         startX, endX, totalDist, dir,
         startY:    h * (.12 + Math.random() * .52),
-        arcHeight: h * (0.05 + Math.random() * 0.13),
+        arcHeight: h * (0.14 + Math.random() * 0.18),
         speed:     1.4 + Math.random() * 1.2,
         willExplode: Math.random() < 0.45,
       }));
@@ -1690,11 +1690,17 @@ class AtmCanvas {
       b.progress = Math.max(0, Math.min(1, Math.abs(b.x - b.startX) / b.totalDist));
       const t = b.progress;
 
-      // Parabolic arc — smooth parametric Y
-      b.y = b.startY - b.arcHeight * 4 * t * (1 - t);
+      // Asymmetric parabola: peaks at t=0.28, rises fast then drops steeply like real gravity
+      const pk = 0.28;
+      const arc = t < pk
+        ? b.arcHeight * (t / pk)                        // quick rise to peak
+        : b.arcHeight * Math.pow((1 - t) / (1 - pk), 1.6); // steep curved drop
+      b.y = b.startY - arc;
 
-      // Target rotation from arc tangent — lerp toward it smoothly each frame
-      const dy = -b.arcHeight * 4 * (1 - 2 * t);
+      // Rotation follows arc tangent — derivative of asymmetric parabola
+      const dy = t < pk
+        ? -b.arcHeight / pk
+        : b.arcHeight * 1.6 * Math.pow((1-t)/(1-pk), 0.6) / (1-pk);
       const targetRot = Math.atan2(dy, b.speed * 60) * 0.55;
       b.rot += (targetRot - b.rot) * 0.18;  // smooth interpolation, no snapping
 
