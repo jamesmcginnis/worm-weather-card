@@ -233,7 +233,7 @@ class AtmCanvas {
     this._birds=[]; this._windVapor=[];
     this._shootStars=[]; this._comets=[]; this._planes=[];
     this._dustMotes=[]; this._ufos=[]; this._enterprise=[];
-    this._borg=[]; this._borgTint=0; this._borgWobblePh=0; this._wormhole=null; this._angryBirdFlock=[]; this._abQueue=null; this._abLaunchDelay=0; this._aurora=null;
+    this._borg=[]; this._borgTint=0; this._borgWobblePh=0; this._wormhole=null; this._angryBirdFlock=[]; this._abExplosions=[]; this._abQueue=null; this._abLaunchDelay=0; this._aurora=null;
     this._flashOp=0;
 
     this._buildStars(c, w, h);
@@ -1651,9 +1651,10 @@ class AtmCanvas {
         type: types[Math.floor(Math.random() * types.length)],
         sc: 0.48 + Math.random() * 0.30,
         startX, endX, totalDist, dir,
-        startY:    h * (.12 + Math.random() * .52),              // unique vertical lane
-        arcHeight: h * (0.08 + Math.random() * 0.22),            // unique arc height
-        speed:     1.4 + Math.random() * 1.2,                    // unique speed
+        startY:    h * (.12 + Math.random() * .52),
+        arcHeight: h * (0.08 + Math.random() * 0.22),
+        speed:     1.4 + Math.random() * 1.2,
+        willExplode: Math.random() < 0.45,
       }));
       this._abLaunchDelay = 0;
     }
@@ -1668,7 +1669,8 @@ class AtmCanvas {
           totalDist: def.totalDist, speed: def.speed,
           arcHeight: def.arcHeight, dir: def.dir,
           sc: def.sc, type: def.type,
-          progress: 0, rot: 0, trail: [],
+          progress: 0, rot: 0, trail: [], exploded: false,
+          willExplode: def.willExplode,
         });
         // Random gap before next bird: 55–130 frames — feels like slingshot reloading
         this._abLaunchDelay = 55 + Math.floor(Math.random() * 75);
@@ -1890,8 +1892,67 @@ class AtmCanvas {
 
       ctx.restore();
 
-      // Remove once bird has crossed to the other side
-      if (b.dir > 0 ? b.x > b.endX + 20 : b.x < b.endX - 20) this._angryBirdFlock.splice(i, 1);
+      // Explode when mostly across screen
+      if (b.willExplode && !b.exploded && b.progress > 0.72) {
+        b.exploded = true;
+        const numPieces = 10 + Math.floor(Math.random() * 8);
+        for (let p = 0; p < numPieces; p++) {
+          const ang = (p / numPieces) * PI2 + Math.random() * 0.5;
+          const spd = 1.8 + Math.random() * 3.0;
+          this._abExplosions.push({
+            x: b.x, y: b.y,
+            vx: Math.cos(ang) * spd,
+            vy: Math.sin(ang) * spd - 1.2,
+            life: 1.0,
+            size: (1.5 + Math.random() * 3.5) * b.sc,
+            type: b.type,  // use bird colour for feather pieces
+          });
+        }
+        // Big flash ring
+        this._abExplosions.push({ x: b.x, y: b.y, vx:0, vy:0, life:1.0, size:28*b.sc, type:'flash' });
+        // Remove the bird
+        this._angryBirdFlock.splice(i, 1);
+      } else if (b.dir > 0 ? b.x > b.endX + 20 : b.x < b.endX - 20) {
+        this._angryBirdFlock.splice(i, 1);
+      }
+    }
+
+    // ── Draw & update explosions ──
+    for (let i = this._abExplosions.length - 1; i >= 0; i--) {
+      const p = this._abExplosions[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.12; // gravity on pieces
+      p.life -= p.type === 'flash' ? 0.08 : 0.045;
+      if (p.life <= 0) { this._abExplosions.splice(i, 1); continue; }
+
+      ctx.save();
+      if (p.type === 'flash') {
+        // Expanding ring flash
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = p.life * 0.7;
+        const fr = p.size * (1 - p.life + 1);  // grows as life drops
+        const fg = ctx.createRadialGradient(p.x, p.y, fr*0.3, p.x, p.y, fr);
+        fg.addColorStop(0, 'rgba(255,220,80,0.9)');
+        fg.addColorStop(0.5,'rgba(255,120,20,0.5)');
+        fg.addColorStop(1,  'rgba(255,60,0,0)');
+        ctx.fillStyle = fg;
+        ctx.beginPath(); ctx.arc(p.x, p.y, fr, 0, PI2); ctx.fill();
+      } else {
+        // Feather/debris piece
+        const pieceCol = {
+          red:'rgba(220,40,30,1)', yellow:'rgba(255,200,15,1)',
+          blue:'rgba(55,115,215,1)', black:'rgba(40,40,45,1)', bomb:'rgba(40,40,45,1)'
+        }[p.type] || 'rgba(200,40,30,1)';
+        ctx.globalAlpha = p.life * 0.9;
+        ctx.fillStyle = pieceCol;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.life * 8); // spin
+        ctx.beginPath();
+        ctx.ellipse(0, 0, p.size, p.size * 0.4, 0, 0, PI2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
   }
