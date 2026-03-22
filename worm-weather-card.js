@@ -233,7 +233,7 @@ class AtmCanvas {
     this._birds=[]; this._windVapor=[];
     this._shootStars=[]; this._comets=[]; this._planes=[];
     this._dustMotes=[]; this._ufos=[]; this._enterprise=[];
-    this._borg=[]; this._borgTint=0; this._borgWobblePh=0; this._wormhole=null; this._angryBirdFlock=[]; this._aurora=null;
+    this._borg=[]; this._borgTint=0; this._borgWobblePh=0; this._wormhole=null; this._angryBirdFlock=[]; this._abQueue=null; this._abLaunchDelay=0; this._aurora=null;
     this._flashOp=0;
 
     this._buildStars(c, w, h);
@@ -1634,29 +1634,46 @@ class AtmCanvas {
   _dAngryBirds(ctx, w, h) {
     if (!this._angryBirds) return;
 
-    // Spawn a new flock occasionally
     this._angryBirdTimer++;
-    if (this._angryBirdFlock.length === 0 && this._angryBirdTimer > 380 && Math.random() < .006) {
+
+    // Trigger a new sequence at random intervals, similar to the UFO — rare and unpredictable
+    if (!this._abQueue && this._angryBirdFlock.length === 0 && this._angryBirdTimer > 480 && Math.random() < .0018) {
       this._angryBirdTimer = 0;
       const goRight = Math.random() > .5;
       const dir = goRight ? 1 : -1;
-      const count = 1 + Math.floor(Math.random() * 4); // 1-4 birds
+      const count = 1 + Math.floor(Math.random() * 4);
       const types = ['red','yellow','blue','black','bomb'];
-      const startY = h * (.12 + Math.random() * .50);
-      // Each bird launched with slight offset so they arc slightly differently
-      for (let i = 0; i < count; i++) {
-        const type = types[Math.floor(Math.random() * types.length)];
-        const sc = 0.45 + Math.random() * 0.35;
-        const startX = goRight ? -40 - i * 22 : w + 40 + i * 22;
-        const speed = (2.0 + Math.random() * 1.0) * dir;
-        const vy0 = -(1.4 + Math.random() * 0.8); // initial upward velocity
+      const startY = h * (.15 + Math.random() * .45);
+      const arcHeight = h * (0.12 + Math.random() * 0.18);
+      const speed = 1.8 + Math.random() * 1.0;
+      const startX = goRight ? -50 : w + 50;
+      const endX   = goRight ? w + 50 : -50;
+      const totalDist = Math.abs(endX - startX);
+
+      this._abQueue = Array.from({length: count}, () => ({
+        type: types[Math.floor(Math.random() * types.length)],
+        sc: 0.48 + Math.random() * 0.30,
+        startX, startY, endX, totalDist, speed, arcHeight, dir,
+      }));
+      this._abLaunchDelay = 0;
+    }
+
+    // Launch next bird from queue — random interval between each bird
+    if (this._abQueue && this._abQueue.length > 0) {
+      this._abLaunchDelay--;
+      if (this._abLaunchDelay <= 0) {
+        const def = this._abQueue.shift();
         this._angryBirdFlock.push({
-          x: startX, y: startY + (Math.random() - 0.5) * 20,
-          vx: speed, vy: vy0,
-          sc, type, dir,
-          rot: 0, rotV: dir * (0.04 + Math.random() * 0.06),
-          trail: [], // feather puff trail
+          x: def.startX, y: def.startY,
+          startX: def.startX, startY: def.startY, endX: def.endX,
+          totalDist: def.totalDist, speed: def.speed,
+          arcHeight: def.arcHeight, dir: def.dir,
+          sc: def.sc, type: def.type,
+          progress: 0, rot: 0, trail: [],
         });
+        // Random delay before next bird: 45-120 frames (~1.5–4s), like the slingshot reload time
+        this._abLaunchDelay = 45 + Math.floor(Math.random() * 75);
+        if (this._abQueue.length === 0) this._abQueue = null;
       }
     }
 
@@ -1664,18 +1681,29 @@ class AtmCanvas {
 
     for (let i = this._angryBirdFlock.length - 1; i >= 0; i--) {
       const b = this._angryBirdFlock[i];
-      b.vy += 0.055; // gravity
-      b.x += b.vx;
-      b.y += b.vy;
-      b.rot += b.rotV;
+
+      // Advance horizontal position
+      b.x += b.speed * b.dir;
+
+      // Compute progress (0 → 1) as fraction of full crossing
+      b.progress = Math.abs(b.x - b.startX) / b.totalDist;
+
+      // Parabolic arc: y dips DOWN then comes back up (like a slingshot shot)
+      // At t=0 and t=1: y = startY. Peak dip upward at t=0.5
+      const t = Math.max(0, Math.min(1, b.progress));
+      b.y = b.startY - b.arcHeight * 4 * t * (1 - t);
+
+      // Rotation follows the arc tangent for natural tumble
+      const dy = -b.arcHeight * 4 * (1 - 2 * t); // derivative of parabola
+      b.rot = Math.atan2(dy, b.speed * b.dir) * 0.6; // soften rotation slightly
 
       // Store trail puff
-      b.trail.push({x: b.x, y: b.y, op: 0.35});
+      b.trail.push({x: b.x, y: b.y, op: 0.30});
       if (b.trail.length > 10) b.trail.shift();
 
-      // Draw trail puffs (feathers)
+      // Draw trail
       for (const p of b.trail) {
-        p.op *= 0.85;
+        p.op *= 0.82;
         ctx.globalAlpha = p.op;
         ctx.fillStyle = 'rgba(255,255,255,0.6)';
         ctx.beginPath(); ctx.arc(p.x, p.y, 2.5 * b.sc, 0, PI2); ctx.fill();
@@ -1814,8 +1842,8 @@ class AtmCanvas {
 
       ctx.restore();
 
-      // Remove when off screen
-      if (b.x < -100 || b.x > w + 100 || b.y > h + 80) this._angryBirdFlock.splice(i, 1);
+      // Remove once bird has crossed to the other side
+      if (b.dir > 0 ? b.x > b.endX + 20 : b.x < b.endX - 20) this._angryBirdFlock.splice(i, 1);
     }
     ctx.globalAlpha = 1;
   }
