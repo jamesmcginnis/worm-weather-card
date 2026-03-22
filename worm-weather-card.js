@@ -1636,29 +1636,28 @@ class AtmCanvas {
 
     this._angryBirdTimer++;
 
-    // Trigger a new sequence at random intervals, similar to the UFO — rare and unpredictable
     if (!this._abQueue && this._angryBirdFlock.length === 0 && this._angryBirdTimer > 480 && Math.random() < .0018) {
       this._angryBirdTimer = 0;
       const goRight = Math.random() > .5;
       const dir = goRight ? 1 : -1;
       const count = 1 + Math.floor(Math.random() * 4);
       const types = ['red','yellow','blue','black','bomb'];
-      const startY = h * (.15 + Math.random() * .45);
-      const arcHeight = h * (0.12 + Math.random() * 0.18);
-      const speed = 1.8 + Math.random() * 1.0;
       const startX = goRight ? -50 : w + 50;
       const endX   = goRight ? w + 50 : -50;
       const totalDist = Math.abs(endX - startX);
 
+      // Each bird gets its own unique arc — different height, speed and vertical position
       this._abQueue = Array.from({length: count}, () => ({
         type: types[Math.floor(Math.random() * types.length)],
         sc: 0.48 + Math.random() * 0.30,
-        startX, startY, endX, totalDist, speed, arcHeight, dir,
+        startX, endX, totalDist, dir,
+        startY:    h * (.12 + Math.random() * .52),              // unique vertical lane
+        arcHeight: h * (0.08 + Math.random() * 0.22),            // unique arc height
+        speed:     1.4 + Math.random() * 1.2,                    // unique speed
       }));
       this._abLaunchDelay = 0;
     }
 
-    // Launch next bird from queue — random interval between each bird
     if (this._abQueue && this._abQueue.length > 0) {
       this._abLaunchDelay--;
       if (this._abLaunchDelay <= 0) {
@@ -1671,8 +1670,8 @@ class AtmCanvas {
           sc: def.sc, type: def.type,
           progress: 0, rot: 0, trail: [],
         });
-        // Random delay before next bird: 45-120 frames (~1.5–4s), like the slingshot reload time
-        this._abLaunchDelay = 45 + Math.floor(Math.random() * 75);
+        // Random gap before next bird: 55–130 frames — feels like slingshot reloading
+        this._abLaunchDelay = 55 + Math.floor(Math.random() * 75);
         if (this._abQueue.length === 0) this._abQueue = null;
       }
     }
@@ -1685,17 +1684,17 @@ class AtmCanvas {
       // Advance horizontal position
       b.x += b.speed * b.dir;
 
-      // Compute progress (0 → 1) as fraction of full crossing
-      b.progress = Math.abs(b.x - b.startX) / b.totalDist;
+      // Compute progress (0 → 1) across full crossing
+      b.progress = Math.max(0, Math.min(1, Math.abs(b.x - b.startX) / b.totalDist));
+      const t = b.progress;
 
-      // Parabolic arc: y dips DOWN then comes back up (like a slingshot shot)
-      // At t=0 and t=1: y = startY. Peak dip upward at t=0.5
-      const t = Math.max(0, Math.min(1, b.progress));
+      // Parabolic arc — smooth parametric Y
       b.y = b.startY - b.arcHeight * 4 * t * (1 - t);
 
-      // Rotation follows the arc tangent for natural tumble
-      const dy = -b.arcHeight * 4 * (1 - 2 * t); // derivative of parabola
-      b.rot = Math.atan2(dy, b.speed * b.dir) * 0.6; // soften rotation slightly
+      // Target rotation from arc tangent — lerp toward it smoothly each frame
+      const dy = -b.arcHeight * 4 * (1 - 2 * t);
+      const targetRot = Math.atan2(dy, b.speed * 60) * 0.55;
+      b.rot += (targetRot - b.rot) * 0.18;  // smooth interpolation, no snapping
 
       // Store trail puff
       b.trail.push({x: b.x, y: b.y, op: 0.30});
@@ -1710,135 +1709,184 @@ class AtmCanvas {
       }
       ctx.globalAlpha = 1;
 
-      // Draw bird
+      // Draw bird — facing direction of travel
       ctx.save();
       ctx.translate(b.x, b.y);
       ctx.rotate(b.rot);
+      // Flip so bird always faces forward (in direction of travel)
+      if (b.dir < 0) ctx.scale(-1, 1);
       const sc = b.sc;
-      const r = 11 * sc; // body radius
+      const r = 13 * sc;
 
-      // ── Body ──
-      const bodyColours = {
-        red:   ['rgba(220,40,30,1)',  'rgba(185,25,18,1)',  'rgba(255,80,60,1)'],
-        yellow:['rgba(255,210,20,1)', 'rgba(220,170,10,1)', 'rgba(255,240,80,1)'],
-        blue:  ['rgba(60,120,220,1)', 'rgba(30,80,180,1)',  'rgba(120,180,255,1)'],
-        black: ['rgba(40,40,45,1)',   'rgba(20,20,22,1)',   'rgba(80,80,90,1)'],
-        bomb:  ['rgba(35,35,40,1)',   'rgba(15,15,18,1)',   'rgba(70,70,80,1)'],
-      };
-      const [bodyCol, shadowCol, hiliteCol] = bodyColours[b.type] || bodyColours.red;
+      const drawAngryBird = (type) => {
+        switch(type) {
 
-      const bodyG = ctx.createRadialGradient(-r*0.25, -r*0.3, 0, 0, 0, r);
-      bodyG.addColorStop(0, hiliteCol);
-      bodyG.addColorStop(0.45, bodyCol);
-      bodyG.addColorStop(1, shadowCol);
-      ctx.fillStyle = bodyG;
-      ctx.beginPath(); ctx.arc(0, 0, r, 0, PI2); ctx.fill();
-
-      // ── Angry eyebrow ──
-      ctx.strokeStyle = 'rgba(30,15,5,1)';
-      ctx.lineWidth = 1.8 * sc; ctx.lineCap = 'round';
-      // Left brow — angled inward (angry)
-      ctx.beginPath();
-      ctx.moveTo(-r*0.55, -r*0.28);
-      ctx.lineTo(-r*0.12, -r*0.48);
-      ctx.stroke();
-      // Right brow
-      ctx.beginPath();
-      ctx.moveTo( r*0.55, -r*0.28);
-      ctx.lineTo( r*0.12, -r*0.48);
-      ctx.stroke();
-
-      // ── Eyes ──
-      // White sclera
-      ctx.fillStyle = 'rgba(255,255,255,0.95)';
-      ctx.beginPath(); ctx.ellipse(-r*0.28, -r*0.16, r*0.22, r*0.26, -0.15, 0, PI2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse( r*0.28, -r*0.16, r*0.22, r*0.26,  0.15, 0, PI2); ctx.fill();
-      // Pupils
-      ctx.fillStyle = 'rgba(20,10,5,1)';
-      ctx.beginPath(); ctx.ellipse(-r*0.24, -r*0.12, r*0.12, r*0.15, 0, 0, PI2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse( r*0.24, -r*0.12, r*0.12, r*0.15, 0, 0, PI2); ctx.fill();
-      // Eye shine
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.beginPath(); ctx.arc(-r*0.20, -r*0.18, r*0.05, 0, PI2); ctx.fill();
-      ctx.beginPath(); ctx.arc( r*0.28,  -r*0.18, r*0.05, 0, PI2); ctx.fill();
-
-      // ── Beak ──
-      ctx.fillStyle = 'rgba(255,165,20,1)';
-      ctx.beginPath();
-      ctx.moveTo(-r*0.20, r*0.08);
-      ctx.lineTo( r*0.20, r*0.08);
-      ctx.lineTo( r*0.14, r*0.30);
-      ctx.lineTo(-r*0.14, r*0.30);
-      ctx.closePath(); ctx.fill();
-      // Beak highlight
-      ctx.fillStyle = 'rgba(255,210,80,0.7)';
-      ctx.beginPath();
-      ctx.moveTo(-r*0.16, r*0.10);
-      ctx.lineTo( r*0.16, r*0.10);
-      ctx.lineTo( r*0.10, r*0.20);
-      ctx.lineTo(-r*0.10, r*0.20);
-      ctx.closePath(); ctx.fill();
-
-      // ── Type-specific features ──
-      if (b.type === 'red') {
-        // Crest feathers on top
-        ctx.fillStyle = 'rgba(200,30,20,1)';
-        for (let f = 0; f < 3; f++) {
-          const fx = (f - 1) * r * 0.28;
-          ctx.beginPath();
-          ctx.moveTo(fx - r*0.08, -r*0.75);
-          ctx.lineTo(fx,          -r*1.10);
-          ctx.lineTo(fx + r*0.08, -r*0.75);
-          ctx.closePath(); ctx.fill();
+        case 'red': {
+          // Red Bird — round body, big angry brows, yellow beak facing right
+          // Body
+          const bg = ctx.createRadialGradient(-r*.22,-r*.28,0, 0,0, r*1.05);
+          bg.addColorStop(0,'rgba(255,90,65,1)'); bg.addColorStop(.45,'rgba(215,35,25,1)'); bg.addColorStop(1,'rgba(150,18,12,1)');
+          ctx.fillStyle=bg; ctx.beginPath(); ctx.arc(0,0,r,0,PI2); ctx.fill();
+          // Three crest feathers on top — pointing up-right
+          ctx.fillStyle='rgba(190,22,15,1)';
+          const crests=[[r*.05,-r*.88,r*.18],[r*.28,-r*.78,r*.14],[r*.48,-r*.62,r*.12]];
+          for(const[cx,cy,cr]of crests){
+            ctx.beginPath(); ctx.ellipse(cx,cy,cr*.5,cr,-.3,0,PI2); ctx.fill();
+          }
+          // Big thick angry brows (V-shape pointing right)
+          ctx.strokeStyle='rgba(20,8,4,1)'; ctx.lineWidth=r*.25; ctx.lineCap='round';
+          ctx.beginPath(); ctx.moveTo(-r*.42,-r*.22); ctx.lineTo(-r*.08,-r*.50); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(r*.42,-r*.20); ctx.lineTo(r*.08,-r*.50); ctx.stroke();
+          // White eyes
+          ctx.fillStyle='rgba(255,255,255,1)';
+          ctx.beginPath(); ctx.ellipse(-r*.22,-r*.10, r*.20,r*.22,-.2,0,PI2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse( r*.22,-r*.10, r*.20,r*.22, .2,0,PI2); ctx.fill();
+          // Dark pupils — looking slightly angry/left
+          ctx.fillStyle='rgba(15,8,2,1)';
+          ctx.beginPath(); ctx.ellipse(-r*.20,-r*.08,r*.10,r*.13,0,0,PI2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse( r*.22,-r*.08,r*.10,r*.13,0,0,PI2); ctx.fill();
+          // Eye shine
+          ctx.fillStyle='rgba(255,255,255,.85)';
+          ctx.beginPath(); ctx.arc(-r*.15,-r*.14,r*.04,0,PI2); ctx.fill();
+          ctx.beginPath(); ctx.arc( r*.27,-r*.14,r*.04,0,PI2); ctx.fill();
+          // Beak — two-part yellow beak on right side of face
+          ctx.fillStyle='rgba(255,175,15,1)';
+          ctx.beginPath(); ctx.moveTo(r*.20,-r*.05); ctx.lineTo(r*.78,r*.04); ctx.lineTo(r*.20,r*.18); ctx.closePath(); ctx.fill(); // upper
+          ctx.fillStyle='rgba(215,140,10,1)';
+          ctx.beginPath(); ctx.moveTo(r*.22,r*.10); ctx.lineTo(r*.75,r*.04); ctx.lineTo(r*.22,r*.32); ctx.closePath(); ctx.fill(); // lower
+          // Tail
+          ctx.fillStyle='rgba(165,20,15,1)';
+          ctx.beginPath(); ctx.moveTo(-r*.70,r*.10); ctx.lineTo(-r*1.20,-r*.12); ctx.lineTo(-r*1.10,r*.38); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(-r*.65,r*.22); ctx.lineTo(-r*1.15,r*.42); ctx.lineTo(-r*.80,r*.60); ctx.closePath(); ctx.fill();
+          break;
         }
-      } else if (b.type === 'yellow') {
-        // Triangular body extension (pointy bird)
-        ctx.fillStyle = bodyCol;
-        ctx.beginPath();
-        ctx.moveTo(-r*0.3, -r*0.5);
-        ctx.lineTo( r*0.3, -r*0.5);
-        ctx.lineTo( 0,     -r*1.15);
-        ctx.closePath(); ctx.fill();
-        // Yellow crest highlight
-        const yg = ctx.createLinearGradient(0,-r*1.15,0,-r*0.5);
-        yg.addColorStop(0,'rgba(255,240,80,0.9)'); yg.addColorStop(1,'rgba(255,210,20,0)');
-        ctx.fillStyle=yg;
-        ctx.beginPath();
-        ctx.moveTo(-r*0.2,-r*0.55); ctx.lineTo(r*0.2,-r*0.55); ctx.lineTo(0,-r*1.1);
-        ctx.closePath(); ctx.fill();
-      } else if (b.type === 'blue') {
-        // Tiny tuft
-        ctx.fillStyle = 'rgba(80,150,240,1)';
-        ctx.beginPath();
-        ctx.moveTo(-r*0.12, -r*0.85);
-        ctx.lineTo( 0,      -r*1.08);
-        ctx.lineTo( r*0.12, -r*0.85);
-        ctx.closePath(); ctx.fill();
-      } else if (b.type === 'bomb' || b.type === 'black') {
-        // Fuse on top
-        ctx.strokeStyle = 'rgba(80,70,50,1)';
-        ctx.lineWidth = 1.5 * sc; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(r*0.05,-r*0.95); ctx.lineTo(r*0.25,-r*1.25); ctx.stroke();
-        // Spark at fuse tip
-        ctx.save(); ctx.globalCompositeOperation='lighter';
-        ctx.globalAlpha=0.6+Math.sin(Date.now()*0.02)*0.4;
-        const spark=ctx.createRadialGradient(r*0.25,-r*1.25,0,r*0.25,-r*1.25,4*sc);
-        spark.addColorStop(0,'rgba(255,200,50,1)'); spark.addColorStop(1,'rgba(255,100,0,0)');
-        ctx.fillStyle=spark; ctx.beginPath(); ctx.arc(r*0.25,-r*1.25,4*sc,0,PI2); ctx.fill();
-        ctx.restore();
-        // White chest patch
-        ctx.fillStyle='rgba(240,240,240,0.25)';
-        ctx.beginPath(); ctx.ellipse(0,r*0.1,r*0.32,r*0.28,0,0,PI2); ctx.fill();
-      }
 
-      // ── Tail feathers ──
-      const tailDir = b.dir > 0 ? 1 : -1;
-      ctx.fillStyle = bodyColours[b.type]?.[0] || 'rgba(200,40,30,1)';
-      ctx.beginPath();
-      ctx.moveTo(tailDir*r*0.7, r*0.2);
-      ctx.lineTo(tailDir*r*1.25, -r*0.05);
-      ctx.lineTo(tailDir*r*0.85, r*0.55);
-      ctx.closePath(); ctx.fill();
+        case 'yellow': {
+          // Yellow Bird (Chuck) — triangular/pointy body, small beak, speed bird
+          // Body — not a circle, a rounded triangle pointing right
+          ctx.fillStyle='rgba(245,195,10,1)';
+          ctx.beginPath();
+          ctx.moveTo( r*1.10, r*.05);                        // rightmost point (beak direction)
+          ctx.bezierCurveTo(r*.60,-r*.90, -r*.40,-r*.95, -r*.85,-r*.55); // top-right to top-left
+          ctx.bezierCurveTo(-r*1.10,-r*.20,-r*1.10,r*.50,-r*.85,r*.70);  // left side
+          ctx.bezierCurveTo(-r*.40,r*1.0,  r*.60, r*.85, r*1.10,r*.05);  // bottom back up
+          ctx.fill();
+          // Gradient overlay
+          const yg=ctx.createRadialGradient(-r*.3,-r*.4,0,0,0,r*1.1);
+          yg.addColorStop(0,'rgba(255,240,80,.7)'); yg.addColorStop(.5,'rgba(240,195,0,.2)'); yg.addColorStop(1,'rgba(180,130,0,.4)');
+          ctx.fillStyle=yg; ctx.beginPath();
+          ctx.moveTo( r*1.10, r*.05);
+          ctx.bezierCurveTo(r*.60,-r*.90,-r*.40,-r*.95,-r*.85,-r*.55);
+          ctx.bezierCurveTo(-r*1.10,-r*.20,-r*1.10,r*.50,-r*.85,r*.70);
+          ctx.bezierCurveTo(-r*.40,r*1.0,r*.60,r*.85,r*1.10,r*.05);
+          ctx.fill();
+          // Angry brows
+          ctx.strokeStyle='rgba(20,8,2,1)'; ctx.lineWidth=r*.22; ctx.lineCap='round';
+          ctx.beginPath(); ctx.moveTo(-r*.10,-r*.38); ctx.lineTo(r*.30,-r*.58); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo( r*.55,-r*.28); ctx.lineTo(r*.30,-r*.58); ctx.stroke();
+          // Eyes
+          ctx.fillStyle='rgba(255,255,255,1)';
+          ctx.beginPath(); ctx.ellipse(r*.10,-r*.20,r*.18,r*.20,0,0,PI2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(r*.48,-r*.18,r*.16,r*.18,0,0,PI2); ctx.fill();
+          ctx.fillStyle='rgba(15,8,2,1)';
+          ctx.beginPath(); ctx.arc(r*.14,-r*.18,r*.09,0,PI2); ctx.fill();
+          ctx.beginPath(); ctx.arc(r*.50,-r*.17,r*.08,0,PI2); ctx.fill();
+          ctx.fillStyle='rgba(255,255,255,.85)';
+          ctx.beginPath(); ctx.arc(r*.10,-r*.22,r*.04,0,PI2); ctx.fill();
+          ctx.beginPath(); ctx.arc(r*.46,-r*.22,r*.03,0,PI2); ctx.fill();
+          // Small pointed beak at tip
+          ctx.fillStyle='rgba(255,160,10,1)';
+          ctx.beginPath(); ctx.moveTo(r*.85,-r*.06); ctx.lineTo(r*1.14,r*.04); ctx.lineTo(r*.88,r*.16); ctx.closePath(); ctx.fill();
+          // Tail feathers — three spikes
+          ctx.fillStyle='rgba(200,150,8,1)';
+          for(const[ox,oy,tx,ty] of [[-r*.75,-r*.55,-r*1.25,-r*.75],[-r*.85,-r*.10,-r*1.35,-r*.08],[-r*.78,r*.35,-r*1.20,r*.55]]){
+            ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(tx,ty); ctx.lineTo(ox+r*.12,oy+r*.20); ctx.closePath(); ctx.fill();
+          }
+          break;
+        }
+
+        case 'blue': {
+          // Blue Bird (Jay) — small, round, tuft on top
+          const rbg=ctx.createRadialGradient(-r*.2,-r*.25,0,0,0,r);
+          rbg.addColorStop(0,'rgba(140,195,255,1)'); rbg.addColorStop(.4,'rgba(55,115,215,1)'); rbg.addColorStop(1,'rgba(25,65,170,1)');
+          ctx.fillStyle=rbg; ctx.beginPath(); ctx.arc(0,0,r,0,PI2); ctx.fill();
+          // Tuft — two small feather spikes
+          ctx.fillStyle='rgba(75,145,235,1)';
+          ctx.beginPath(); ctx.ellipse(r*.10,-r*.85,r*.12,r*.22,-.25,0,PI2); ctx.fill();
+          ctx.fillStyle='rgba(110,175,250,1)';
+          ctx.beginPath(); ctx.ellipse(r*.28,-r*.80,r*.10,r*.18,-.15,0,PI2); ctx.fill();
+          // Brows
+          ctx.strokeStyle='rgba(20,8,2,1)'; ctx.lineWidth=r*.20; ctx.lineCap='round';
+          ctx.beginPath(); ctx.moveTo(-r*.38,-r*.22); ctx.lineTo(-r*.08,-r*.44); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(r*.38,-r*.20); ctx.lineTo(r*.08,-r*.44); ctx.stroke();
+          // Eyes
+          ctx.fillStyle='rgba(255,255,255,1)';
+          ctx.beginPath(); ctx.ellipse(-r*.22,-r*.10,r*.18,r*.20,-.1,0,PI2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse( r*.22,-r*.10,r*.18,r*.20, .1,0,PI2); ctx.fill();
+          ctx.fillStyle='rgba(15,8,2,1)';
+          ctx.beginPath(); ctx.arc(-r*.20,-r*.08,r*.09,0,PI2); ctx.fill();
+          ctx.beginPath(); ctx.arc( r*.22,-r*.08,r*.09,0,PI2); ctx.fill();
+          ctx.fillStyle='rgba(255,255,255,.85)';
+          ctx.beginPath(); ctx.arc(-r*.15,-r*.13,r*.04,0,PI2); ctx.fill();
+          ctx.beginPath(); ctx.arc( r*.27,-r*.13,r*.04,0,PI2); ctx.fill();
+          // Small beak
+          ctx.fillStyle='rgba(255,175,15,1)';
+          ctx.beginPath(); ctx.moveTo(r*.18,r*.00); ctx.lineTo(r*.65,r*.06); ctx.lineTo(r*.18,r*.22); ctx.closePath(); ctx.fill();
+          ctx.fillStyle='rgba(215,140,10,1)';
+          ctx.beginPath(); ctx.moveTo(r*.20,r*.12); ctx.lineTo(r*.62,r*.06); ctx.lineTo(r*.20,r*.28); ctx.closePath(); ctx.fill();
+          // Tail
+          ctx.fillStyle='rgba(40,90,190,1)';
+          ctx.beginPath(); ctx.moveTo(-r*.65,r*.05); ctx.lineTo(-r*1.10,-r*.15); ctx.lineTo(-r*1.05,r*.32); ctx.closePath(); ctx.fill();
+          break;
+        }
+
+        case 'black': case 'bomb': {
+          // Black Bird / Bomb Bird — round, dark, fuse
+          const bbg=ctx.createRadialGradient(-r*.18,-r*.22,0,0,0,r);
+          bbg.addColorStop(0,'rgba(90,90,100,1)'); bbg.addColorStop(.4,'rgba(35,35,40,1)'); bbg.addColorStop(1,'rgba(12,12,15,1)');
+          ctx.fillStyle=bbg; ctx.beginPath(); ctx.arc(0,0,r,0,PI2); ctx.fill();
+          // White belly patch
+          ctx.fillStyle='rgba(230,230,235,.18)';
+          ctx.beginPath(); ctx.ellipse(r*.05,r*.15,r*.38,r*.32,0,0,PI2); ctx.fill();
+          // Fuse — curves up from top
+          ctx.strokeStyle='rgba(100,85,55,1)'; ctx.lineWidth=r*.18; ctx.lineCap='round';
+          ctx.beginPath(); ctx.moveTo(r*.08,-r*.92); ctx.quadraticCurveTo(r*.35,-r*1.15,r*.28,-r*1.35); ctx.stroke();
+          // Spark
+          ctx.save(); ctx.globalCompositeOperation='lighter';
+          ctx.globalAlpha = 0.7 + Math.sin(Date.now()*.025)*.3;
+          const sp=ctx.createRadialGradient(r*.28,-r*1.35,0,r*.28,-r*1.35,r*.28);
+          sp.addColorStop(0,'rgba(255,230,50,1)'); sp.addColorStop(.5,'rgba(255,120,10,.7)'); sp.addColorStop(1,'rgba(255,60,0,0)');
+          ctx.fillStyle=sp; ctx.beginPath(); ctx.arc(r*.28,-r*1.35,r*.28,0,PI2); ctx.fill();
+          ctx.restore();
+          // Brows — huge and angry
+          ctx.strokeStyle='rgba(20,8,2,1)'; ctx.lineWidth=r*.28; ctx.lineCap='round';
+          ctx.beginPath(); ctx.moveTo(-r*.45,-r*.18); ctx.lineTo(-r*.08,-r*.48); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(r*.45,-r*.16); ctx.lineTo(r*.08,-r*.48); ctx.stroke();
+          // Eyes — red-tinted for bomb bird
+          ctx.fillStyle='rgba(255,240,230,1)';
+          ctx.beginPath(); ctx.ellipse(-r*.22,-r*.08,r*.20,r*.22,-.15,0,PI2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse( r*.22,-r*.08,r*.20,r*.22, .15,0,PI2); ctx.fill();
+          ctx.fillStyle='rgba(10,5,2,1)';
+          ctx.beginPath(); ctx.ellipse(-r*.20,-r*.06,r*.11,r*.14,0,0,PI2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse( r*.22,-r*.06,r*.11,r*.14,0,0,PI2); ctx.fill();
+          ctx.fillStyle='rgba(255,255,255,.85)';
+          ctx.beginPath(); ctx.arc(-r*.14,-r*.13,r*.04,0,PI2); ctx.fill();
+          ctx.beginPath(); ctx.arc( r*.27,-r*.13,r*.04,0,PI2); ctx.fill();
+          // Beak
+          ctx.fillStyle='rgba(255,165,15,1)';
+          ctx.beginPath(); ctx.moveTo(r*.18,-r*.02); ctx.lineTo(r*.72,r*.06); ctx.lineTo(r*.18,r*.20); ctx.closePath(); ctx.fill();
+          ctx.fillStyle='rgba(210,130,10,1)';
+          ctx.beginPath(); ctx.moveTo(r*.20,r*.12); ctx.lineTo(r*.70,r*.06); ctx.lineTo(r*.20,r*.30); ctx.closePath(); ctx.fill();
+          // Tail
+          ctx.fillStyle='rgba(25,25,30,1)';
+          ctx.beginPath(); ctx.moveTo(-r*.68,r*.08); ctx.lineTo(-r*1.18,-r*.14); ctx.lineTo(-r*1.10,r*.40); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(-r*.62,r*.24); ctx.lineTo(-r*1.08,r*.46); ctx.lineTo(-r*.78,r*.64); ctx.closePath(); ctx.fill();
+          break;
+        }
+        }
+      };
+
+      drawAngryBird(b.type);
 
       ctx.restore();
 
