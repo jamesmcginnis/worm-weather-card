@@ -163,9 +163,9 @@ class AtmCanvas {
     this._whales       = []; this._wormhole   = null;
     this._aurora       = null;
     this._birdTimer = 0; this._planeTimer = 0; this._ufoTimer = 0;
-    this._enterpriseTimer = 0; this._borgTimer   = 0; this._wormholeTimer = 0;
+    this._enterpriseTimer = 0; this._borgTimer   = 0; this._wormholeTimer = 0; this._angryBirdTimer = 0;
     // Sci-fi individual flags
-    this._scifiUFO=true; this._scifiEnterprise=true; this._scifiBorg=true; this._scifiWormhole=true;
+    this._scifiUFO=true; this._scifiEnterprise=true; this._scifiBorg=true; this._scifiWormhole=true; this._angryBirds=true;
     // State
     this._cond = 'sunny'; this._isNight = false; this._isDark = true;
     this._w = 0; this._h = 0;
@@ -179,7 +179,7 @@ class AtmCanvas {
   init(cond, isNight, isDark, w, h, sf = {}) {
     this._cond = cond || 'cloudy';
     this._isNight = !!isNight; this._isDark = !!isDark;
-    this._scifiUFO=sf.ufo!==false; this._scifiEnterprise=sf.enterprise!==false; this._scifiBorg=sf.borg!==false; this._scifiWormhole=sf.wormhole!==false;
+    this._scifiUFO=sf.ufo!==false; this._scifiEnterprise=sf.enterprise!==false; this._scifiBorg=sf.borg!==false; this._scifiWormhole=sf.wormhole!==false; this._angryBirds=sf.angryBirds!==false;
     this._w = w; this._h = h;
     this._cv.width = w; this._cv.height = h;
     this._ctx = this._cv.getContext('2d');
@@ -187,10 +187,10 @@ class AtmCanvas {
   }
 
   update(cond, isNight, isDark, sf = {}) {
-    const nu=sf.ufo!==false, ne=sf.enterprise!==false, nb=sf.borg!==false, nwo=sf.wormhole!==false;
-    const ch = this._cond !== cond || this._isNight !== !!isNight || this._isDark !== !!isDark || this._scifiUFO!==nu || this._scifiEnterprise!==ne || this._scifiBorg!==nb || this._scifiWormhole!==nwo;
+    const nu=sf.ufo!==false, ne=sf.enterprise!==false, nb=sf.borg!==false, nwo=sf.wormhole!==false, nab=sf.angryBirds!==false;
+    const ch = this._cond !== cond || this._isNight !== !!isNight || this._isDark !== !!isDark || this._scifiUFO!==nu || this._scifiEnterprise!==ne || this._scifiBorg!==nb || this._scifiWormhole!==nwo || this._angryBirds!==nab;
     this._cond = cond; this._isNight = !!isNight; this._isDark = !!isDark;
-    this._scifiUFO=nu; this._scifiEnterprise=ne; this._scifiBorg=nb; this._scifiWormhole=nwo;
+    this._scifiUFO=nu; this._scifiEnterprise=ne; this._scifiBorg=nb; this._scifiWormhole=nwo; this._angryBirds=nab;
     if (ch) this._build();
   }
 
@@ -233,7 +233,7 @@ class AtmCanvas {
     this._birds=[]; this._windVapor=[];
     this._shootStars=[]; this._comets=[]; this._planes=[];
     this._dustMotes=[]; this._ufos=[]; this._enterprise=[];
-    this._borg=[]; this._borgTint=0; this._borgWobblePh=0; this._wormhole=null; this._aurora=null;
+    this._borg=[]; this._borgTint=0; this._borgWobblePh=0; this._wormhole=null; this._angryBirdFlock=[]; this._aurora=null;
     this._flashOp=0;
 
     this._buildStars(c, w, h);
@@ -482,6 +482,7 @@ class AtmCanvas {
     this._dEnterprise(ctx,w,h);
     this._dBorg(ctx,w,h);
     if (this._scifiWormhole && this._wormhole) this._dWormhole(ctx,w,h);
+    this._dAngryBirds(ctx,w,h);
     // Foreground clouds (layer 3) drawn on top — UFO passes behind these
     if (this._clouds.length)  this._dClouds(ctx,w,h, 3, 3);
     if (this._dustMotes.length&&!this._isNight) this._dDustMotes(ctx,w,h);
@@ -1629,6 +1630,196 @@ class AtmCanvas {
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   }
 
+  /* ── Angry Birds ─────────────────────────────────────────────── */
+  _dAngryBirds(ctx, w, h) {
+    if (!this._angryBirds) return;
+
+    // Spawn a new flock occasionally
+    this._angryBirdTimer++;
+    if (this._angryBirdFlock.length === 0 && this._angryBirdTimer > 380 && Math.random() < .006) {
+      this._angryBirdTimer = 0;
+      const goRight = Math.random() > .5;
+      const dir = goRight ? 1 : -1;
+      const count = 1 + Math.floor(Math.random() * 4); // 1-4 birds
+      const types = ['red','yellow','blue','black','bomb'];
+      const startY = h * (.12 + Math.random() * .50);
+      // Each bird launched with slight offset so they arc slightly differently
+      for (let i = 0; i < count; i++) {
+        const type = types[Math.floor(Math.random() * types.length)];
+        const sc = 0.45 + Math.random() * 0.35;
+        const startX = goRight ? -40 - i * 22 : w + 40 + i * 22;
+        const speed = (2.0 + Math.random() * 1.0) * dir;
+        const vy0 = -(1.4 + Math.random() * 0.8); // initial upward velocity
+        this._angryBirdFlock.push({
+          x: startX, y: startY + (Math.random() - 0.5) * 20,
+          vx: speed, vy: vy0,
+          sc, type, dir,
+          rot: 0, rotV: dir * (0.04 + Math.random() * 0.06),
+          trail: [], // feather puff trail
+        });
+      }
+    }
+
+    const PI2 = Math.PI * 2;
+
+    for (let i = this._angryBirdFlock.length - 1; i >= 0; i--) {
+      const b = this._angryBirdFlock[i];
+      b.vy += 0.055; // gravity
+      b.x += b.vx;
+      b.y += b.vy;
+      b.rot += b.rotV;
+
+      // Store trail puff
+      b.trail.push({x: b.x, y: b.y, op: 0.35});
+      if (b.trail.length > 10) b.trail.shift();
+
+      // Draw trail puffs (feathers)
+      for (const p of b.trail) {
+        p.op *= 0.85;
+        ctx.globalAlpha = p.op;
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.beginPath(); ctx.arc(p.x, p.y, 2.5 * b.sc, 0, PI2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // Draw bird
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(b.rot);
+      const sc = b.sc;
+      const r = 11 * sc; // body radius
+
+      // ── Body ──
+      const bodyColours = {
+        red:   ['rgba(220,40,30,1)',  'rgba(185,25,18,1)',  'rgba(255,80,60,1)'],
+        yellow:['rgba(255,210,20,1)', 'rgba(220,170,10,1)', 'rgba(255,240,80,1)'],
+        blue:  ['rgba(60,120,220,1)', 'rgba(30,80,180,1)',  'rgba(120,180,255,1)'],
+        black: ['rgba(40,40,45,1)',   'rgba(20,20,22,1)',   'rgba(80,80,90,1)'],
+        bomb:  ['rgba(35,35,40,1)',   'rgba(15,15,18,1)',   'rgba(70,70,80,1)'],
+      };
+      const [bodyCol, shadowCol, hiliteCol] = bodyColours[b.type] || bodyColours.red;
+
+      const bodyG = ctx.createRadialGradient(-r*0.25, -r*0.3, 0, 0, 0, r);
+      bodyG.addColorStop(0, hiliteCol);
+      bodyG.addColorStop(0.45, bodyCol);
+      bodyG.addColorStop(1, shadowCol);
+      ctx.fillStyle = bodyG;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, PI2); ctx.fill();
+
+      // ── Angry eyebrow ──
+      ctx.strokeStyle = 'rgba(30,15,5,1)';
+      ctx.lineWidth = 1.8 * sc; ctx.lineCap = 'round';
+      // Left brow — angled inward (angry)
+      ctx.beginPath();
+      ctx.moveTo(-r*0.55, -r*0.28);
+      ctx.lineTo(-r*0.12, -r*0.48);
+      ctx.stroke();
+      // Right brow
+      ctx.beginPath();
+      ctx.moveTo( r*0.55, -r*0.28);
+      ctx.lineTo( r*0.12, -r*0.48);
+      ctx.stroke();
+
+      // ── Eyes ──
+      // White sclera
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.beginPath(); ctx.ellipse(-r*0.28, -r*0.16, r*0.22, r*0.26, -0.15, 0, PI2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse( r*0.28, -r*0.16, r*0.22, r*0.26,  0.15, 0, PI2); ctx.fill();
+      // Pupils
+      ctx.fillStyle = 'rgba(20,10,5,1)';
+      ctx.beginPath(); ctx.ellipse(-r*0.24, -r*0.12, r*0.12, r*0.15, 0, 0, PI2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse( r*0.24, -r*0.12, r*0.12, r*0.15, 0, 0, PI2); ctx.fill();
+      // Eye shine
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.beginPath(); ctx.arc(-r*0.20, -r*0.18, r*0.05, 0, PI2); ctx.fill();
+      ctx.beginPath(); ctx.arc( r*0.28,  -r*0.18, r*0.05, 0, PI2); ctx.fill();
+
+      // ── Beak ──
+      ctx.fillStyle = 'rgba(255,165,20,1)';
+      ctx.beginPath();
+      ctx.moveTo(-r*0.20, r*0.08);
+      ctx.lineTo( r*0.20, r*0.08);
+      ctx.lineTo( r*0.14, r*0.30);
+      ctx.lineTo(-r*0.14, r*0.30);
+      ctx.closePath(); ctx.fill();
+      // Beak highlight
+      ctx.fillStyle = 'rgba(255,210,80,0.7)';
+      ctx.beginPath();
+      ctx.moveTo(-r*0.16, r*0.10);
+      ctx.lineTo( r*0.16, r*0.10);
+      ctx.lineTo( r*0.10, r*0.20);
+      ctx.lineTo(-r*0.10, r*0.20);
+      ctx.closePath(); ctx.fill();
+
+      // ── Type-specific features ──
+      if (b.type === 'red') {
+        // Crest feathers on top
+        ctx.fillStyle = 'rgba(200,30,20,1)';
+        for (let f = 0; f < 3; f++) {
+          const fx = (f - 1) * r * 0.28;
+          ctx.beginPath();
+          ctx.moveTo(fx - r*0.08, -r*0.75);
+          ctx.lineTo(fx,          -r*1.10);
+          ctx.lineTo(fx + r*0.08, -r*0.75);
+          ctx.closePath(); ctx.fill();
+        }
+      } else if (b.type === 'yellow') {
+        // Triangular body extension (pointy bird)
+        ctx.fillStyle = bodyCol;
+        ctx.beginPath();
+        ctx.moveTo(-r*0.3, -r*0.5);
+        ctx.lineTo( r*0.3, -r*0.5);
+        ctx.lineTo( 0,     -r*1.15);
+        ctx.closePath(); ctx.fill();
+        // Yellow crest highlight
+        const yg = ctx.createLinearGradient(0,-r*1.15,0,-r*0.5);
+        yg.addColorStop(0,'rgba(255,240,80,0.9)'); yg.addColorStop(1,'rgba(255,210,20,0)');
+        ctx.fillStyle=yg;
+        ctx.beginPath();
+        ctx.moveTo(-r*0.2,-r*0.55); ctx.lineTo(r*0.2,-r*0.55); ctx.lineTo(0,-r*1.1);
+        ctx.closePath(); ctx.fill();
+      } else if (b.type === 'blue') {
+        // Tiny tuft
+        ctx.fillStyle = 'rgba(80,150,240,1)';
+        ctx.beginPath();
+        ctx.moveTo(-r*0.12, -r*0.85);
+        ctx.lineTo( 0,      -r*1.08);
+        ctx.lineTo( r*0.12, -r*0.85);
+        ctx.closePath(); ctx.fill();
+      } else if (b.type === 'bomb' || b.type === 'black') {
+        // Fuse on top
+        ctx.strokeStyle = 'rgba(80,70,50,1)';
+        ctx.lineWidth = 1.5 * sc; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(r*0.05,-r*0.95); ctx.lineTo(r*0.25,-r*1.25); ctx.stroke();
+        // Spark at fuse tip
+        ctx.save(); ctx.globalCompositeOperation='lighter';
+        ctx.globalAlpha=0.6+Math.sin(Date.now()*0.02)*0.4;
+        const spark=ctx.createRadialGradient(r*0.25,-r*1.25,0,r*0.25,-r*1.25,4*sc);
+        spark.addColorStop(0,'rgba(255,200,50,1)'); spark.addColorStop(1,'rgba(255,100,0,0)');
+        ctx.fillStyle=spark; ctx.beginPath(); ctx.arc(r*0.25,-r*1.25,4*sc,0,PI2); ctx.fill();
+        ctx.restore();
+        // White chest patch
+        ctx.fillStyle='rgba(240,240,240,0.25)';
+        ctx.beginPath(); ctx.ellipse(0,r*0.1,r*0.32,r*0.28,0,0,PI2); ctx.fill();
+      }
+
+      // ── Tail feathers ──
+      const tailDir = b.dir > 0 ? 1 : -1;
+      ctx.fillStyle = bodyColours[b.type]?.[0] || 'rgba(200,40,30,1)';
+      ctx.beginPath();
+      ctx.moveTo(tailDir*r*0.7, r*0.2);
+      ctx.lineTo(tailDir*r*1.25, -r*0.05);
+      ctx.lineTo(tailDir*r*0.85, r*0.55);
+      ctx.closePath(); ctx.fill();
+
+      ctx.restore();
+
+      // Remove when off screen
+      if (b.x < -100 || b.x > w + 100 || b.y > h + 80) this._angryBirdFlock.splice(i, 1);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   _dDustMotes(ctx, w, h) {
     ctx.save(); ctx.globalCompositeOperation=this._isDark?'lighter':'source-over';
     const light=!this._isDark, m=light?2.2:2.8;
@@ -2052,7 +2243,7 @@ class WormWeatherCard extends HTMLElement {
       auto_animate:true, temp_unit:'°C', wind_unit:'km/h',
       show_hourly:true, show_daily:true, show_details:true, compact_height:160,
       show_wind_on_compact:false,
-      scifiUFO:true, scifiEnterprise:true, scifiBorg:true, scifiWormhole:true,
+      scifiUFO:true, scifiEnterprise:true, scifiBorg:true, scifiWormhole:true, angryBirds:true,
     }, c);
     this._zoom = parseInt(this._cfg.zoom_level) || 7;
     this._expanded = (this._cfg.default_view || 'compact') !== 'compact';
@@ -2355,7 +2546,7 @@ class WormWeatherCard extends HTMLElement {
     // Update canvas animation state
     if (this._atm) {
       const isNight = cond === 'clear-night' || (this._hass && this._hass.states['sun.sun']?.state === 'below_horizon');
-      this._atm.update(cond || 'cloudy', isNight, this._isDarkMode(), {ufo:this._cfg.scifiUFO!==false, enterprise:this._cfg.scifiEnterprise!==false, borg:this._cfg.scifiBorg!==false, wormhole:this._cfg.scifiWormhole!==false});
+      this._atm.update(cond || 'cloudy', isNight, this._isDarkMode(), {ufo:this._cfg.scifiUFO!==false, enterprise:this._cfg.scifiEnterprise!==false, borg:this._cfg.scifiBorg!==false, wormhole:this._cfg.scifiWormhole!==false, angryBirds:this._cfg.angryBirds!==false});
     }
   }
 
@@ -2371,7 +2562,7 @@ class WormWeatherCard extends HTMLElement {
       const st  = this._hass && eid && this._hass.states[eid];
       const cond = st ? (st.state || 'cloudy') : 'cloudy';
       const isNight = cond === 'clear-night' || (this._hass && this._hass.states['sun.sun']?.state === 'below_horizon');
-      const sf = {ufo:this._cfg.scifiUFO!==false, enterprise:this._cfg.scifiEnterprise!==false, borg:this._cfg.scifiBorg!==false, wormhole:this._cfg.scifiWormhole!==false};
+      const sf = {ufo:this._cfg.scifiUFO!==false, enterprise:this._cfg.scifiEnterprise!==false, borg:this._cfg.scifiBorg!==false, wormhole:this._cfg.scifiWormhole!==false, angryBirds:this._cfg.angryBirds!==false};
       if (!this._atm) this._atm = new AtmCanvas(cv);
       this._atm.init(cond, isNight, this._isDarkMode(), w, h, sf);
       this._atm.start();
@@ -2887,6 +3078,11 @@ class WormWeatherCardEditor extends HTMLElement {
       <div class="row-info"><div class="row-label">Stargate</div><div class="row-sub">SG-1 Kawoosh Wormhole</div></div>
       <div class="row-ctrl">${this._tog('tog-scifi-wormhole', c.scifiWormhole!==false)}</div>
     </div>
+    <div class="row">
+      <div class="row-icon" style="background:rgba(255,80,30,0.12)">${ico('mdi:bird',16,'color:#FF5020')}</div>
+      <div class="row-info"><div class="row-label">Angry Birds</div><div class="row-sub">Red, Yellow, Blue, Black and Bomb birds fly in an arc</div></div>
+      <div class="row-ctrl">${this._tog('tog-angry-birds', c.angryBirds!==false)}</div>
+    </div>
   </div></div>
 
 </div>`;
@@ -2917,6 +3113,7 @@ class WormWeatherCardEditor extends HTMLElement {
     const ts2=s.getElementById('tog-scifi-enterprise');if(ts2)ts2.checked=c.scifiEnterprise!==false;
     const ts3=s.getElementById('tog-scifi-borg');if(ts3)ts3.checked=c.scifiBorg!==false;
     const ts4=s.getElementById('tog-scifi-wormhole');if(ts4)ts4.checked=c.scifiWormhole!==false;
+    const ts5=s.getElementById('tog-angry-birds');if(ts5)ts5.checked=c.angryBirds!==false;
     // Update seg opts
     s.querySelectorAll('[data-seg="temp_unit"]').forEach(el=>el.classList.toggle('on',el.dataset.val===(c.temp_unit||'°C')));
     // Update postcode display
@@ -2953,6 +3150,7 @@ class WormWeatherCardEditor extends HTMLElement {
     s.getElementById('tog-scifi-enterprise')?.addEventListener('change', e => this._updateConfig('scifiEnterprise', e.target.checked));
     s.getElementById('tog-scifi-borg')?.addEventListener('change', e => this._updateConfig('scifiBorg', e.target.checked));
     s.getElementById('tog-scifi-wormhole')?.addEventListener('change', e => this._updateConfig('scifiWormhole', e.target.checked));
+    s.getElementById('tog-angry-birds')?.addEventListener('change', e => this._updateConfig('angryBirds', e.target.checked));
     // Segmented controls
     s.querySelectorAll('[data-seg]').forEach(el => el.addEventListener('click', () => {
       const key = el.dataset.seg, val = el.dataset.val;
