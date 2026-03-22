@@ -35,6 +35,7 @@ This card would not exist without that work. Please visit and star the original 
   - **USS Enterprise** — NCC-1701 cruises across the full sky with glowing nacelle trails, then warps away
   - **Borg Cube** — locks a green cone tractor beam onto the Sun or Moon, turning it red and making it wobble. *Resistance is futile.*
   - **Stargate** — SG-1 kawoosh erupts, the gate holds open with a rippling blue liquid surface and rotating chevrons, then closes
+- **Angry Birds** — Red, Yellow, Blue, Black and Bomb birds launch one at a time from a bottom corner, arc diagonally across the full card with realistic physics, and occasionally explode in a burst of feathers that shakes the card
 - Clean visual editor — no YAML required
 
 ---
