@@ -233,7 +233,7 @@ class AtmCanvas {
     this._birds=[]; this._windVapor=[];
     this._shootStars=[]; this._comets=[]; this._planes=[];
     this._dustMotes=[]; this._ufos=[]; this._enterprise=[];
-    this._borg=[]; this._borgTint=0; this._borgWobblePh=0; this._wormhole=null; this._angryBirdFlock=[]; this._abExplosions=[]; this._abQueue=null; this._abLaunchDelay=0; this._aurora=null;
+    this._borg=[]; this._borgTint=0; this._borgWobblePh=0; this._wormhole=null; this._angryBirdFlock=[]; this._abExplosions=[]; this._abQueue=null; this._abLaunchDelay=0; this._shakeAmt=0; this._aurora=null;
     this._flashOp=0;
 
     this._buildStars(c, w, h);
@@ -464,6 +464,13 @@ class AtmCanvas {
       }
     }
     ctx.clearRect(0,0,w,h);
+    ctx.save();
+    if (this._shakeAmt > 0.3) {
+      ctx.translate((Math.random()-0.5)*this._shakeAmt, (Math.random()-0.5)*this._shakeAmt);
+      this._shakeAmt *= 0.75;
+    } else {
+      this._shakeAmt = 0;
+    }
     this._dSky(ctx,w,h);
     // Background layers
     if (this._aurora)                    this._dAurora(ctx,w,h);
@@ -491,6 +498,7 @@ class AtmCanvas {
     if (this._rain.length)   this._dRain(ctx,w,h);
     if (this._snow.length)   this._dSnow(ctx,w,h);
     if (c==='lightning'||c==='lightning-rainy') this._dLightning(ctx,w,h);
+    ctx.restore(); // close shake translate
   }
 
   /* ── Sky ─────────────────────────────────────────────────────── */
@@ -1642,18 +1650,31 @@ class AtmCanvas {
       const dir = goRight ? 1 : -1;
       const count = 1 + Math.floor(Math.random() * 4);
       const types = ['red','yellow','blue','black','bomb'];
-      const startX = goRight ? -50 : w + 50;
-      const endX   = goRight ? w + 50 : -50;
-      const totalDist = Math.abs(endX - startX);
+      const gravity = 0.072;
 
-      // Each bird gets its own unique arc — different height, speed and vertical position
+      // Launch from bottom corner, peak near top-centre, fall off opposite bottom
+      // startX just off bottom-left or bottom-right corner
+      const startX = goRight ? -30 : w + 30;
+      const startY = h * 0.88;
+      // Peak target: top-centre of card
+      const peakX = w * (0.42 + Math.random() * 0.16); // near centre with slight variation
+      const peakY = h * (0.06 + Math.random() * 0.10); // near top
+
+      // Time to reach peak horizontally: t_peak = (peakX - startX) / vx
+      // At peak vy=0, so vy0 = -g*t_peak
+      // y_peak = startY + vy0*t_peak + 0.5*g*t_peak² = startY - 0.5*g*t_peak²
+      // => t_peak = sqrt(2*(startY - peakY)/g)
+      const t_peak = Math.sqrt(2 * (startY - peakY) / gravity);
+      const baseVX  = (peakX - startX) / t_peak;
+      const baseVY0 = -gravity * t_peak;
+
       this._abQueue = Array.from({length: count}, () => ({
         type: types[Math.floor(Math.random() * types.length)],
-        sc: 0.48 + Math.random() * 0.30,
-        startX, endX, totalDist, dir,
-        startY:    h * (.12 + Math.random() * .52),
-        arcHeight: h * (0.14 + Math.random() * 0.18),
-        speed:     1.4 + Math.random() * 1.2,
+        sc: 0.52 + Math.random() * 0.28,
+        startX, startY, dir,
+        vx: baseVX * (0.88 + Math.random() * 0.24), // slight speed variation per bird
+        vy0: baseVY0 * (0.88 + Math.random() * 0.24),
+        gravity,
         willExplode: Math.random() < 0.45,
       }));
       this._abLaunchDelay = 0;
@@ -1663,16 +1684,13 @@ class AtmCanvas {
       this._abLaunchDelay--;
       if (this._abLaunchDelay <= 0) {
         const def = this._abQueue.shift();
-        const gravity = 0.072;
-        // Initial upward velocity derived from desired arc height: vy0 = -sqrt(2*g*arcHeight)
-        const vy0 = -Math.sqrt(2 * gravity * def.arcHeight);
         this._angryBirdFlock.push({
           x: def.startX, y: def.startY,
-          vx: def.speed * def.dir,
-          vy: vy0,
-          gravity,
-          startX: def.startX, endX: def.endX,
-          totalDist: def.totalDist,
+          vx: def.vx, vy: def.vy0,
+          gravity: def.gravity,
+          startX: def.startX,
+          // Use a wide totalDist for progress tracking (full card width)
+          totalDist: w + 80,
           sc: def.sc, type: def.type, dir: def.dir,
           progress: 0, rot: 0, trail: [], exploded: false,
           willExplode: def.willExplode,
@@ -1911,6 +1929,8 @@ class AtmCanvas {
         }
         // Big flash ring
         this._abExplosions.push({ x: b.x, y: b.y, vx:0, vy:0, life:1.0, size:28*b.sc, type:'flash' });
+        // Shake the card
+        this._shakeAmt = Math.max(this._shakeAmt, 7 + b.sc * 5);
         // Remove the bird
         this._angryBirdFlock.splice(i, 1);
       } else if (b.x < -120 || b.x > w + 120 || b.y > h + 100) {
