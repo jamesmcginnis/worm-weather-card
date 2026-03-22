@@ -30,7 +30,8 @@ Without that project, this card would not exist in anything close to its current
   - 🛸 **UFO** — alien saucer glides in, hovers with a tractor beam, and a tiny alien waves from the dome before it zooms away
   - 🚀 **USS Enterprise** — NCC-1701 cruises across the full screen at a shallow angle, then engages warp and climbs out of frame with glowing nacelle trails
   - 🟩 **Borg Cube** — flies in, locks a cone-shaped green tractor beam onto the Sun or Moon, causing it to turn red and wobble, then disengages and departs. *Resistance is futile.*
-  - ⭕ **Stargate** — a Stargate SG-1 style kawoosh erupts, the gate holds open with rippling blue liquid surface and rotating chevron symbols, then closes
+  - ⭕ **Stargate** — a Stargate SG-1 style kawoosh erupts, the gate holds open with a rippling blue liquid surface and rotating chevron symbols, then closes
+- **Angry Birds** — Red, Yellow, Chuck, Blue and Bomb birds launch one at a time from a bottom corner, arc across the full card, and occasionally explode mid-flight with a feather burst and a card shake
 - **Live radar map** — powered by [RainViewer](https://www.rainviewer.com/), continuously animating the past ~2 hours of precipitation with smooth crossfade between frames and a vivid TITAN colour scheme. Pinch and scroll to zoom, drag to pan
 - **Forecast tab** — scrollable day tabs with hourly breakdown; tap any day to see that day's hourly forecast
 - **Weather tab** — compact current conditions with hourly strip and condition tiles (humidity, wind, pressure, UV, visibility, dew point, cloud cover, precipitation)
@@ -80,6 +81,7 @@ scifiUFO: true              # alien UFO animation
 scifiEnterprise: true       # USS Enterprise animation
 scifiBorg: true             # Borg Cube tractor beam animation
 scifiWormhole: true         # Stargate wormhole animation
+angryBirds: true            # Angry Birds flying across the card
 ```
 
 ---
@@ -103,6 +105,15 @@ The card reads your weather entity condition and `sun.sun` to determine day or n
 | Any (rare) | Birds in V-formation, planes with contrails |
 | Aurora | 4% chance on clear/partly-cloudy dark nights |
 | Sci-Fi (optional) | UFO, USS Enterprise, Borg Cube, Stargate — each individually toggleable |
+| Angry Birds (optional) | Red, Yellow, Blue, Black and Bomb birds launched one at a time |
+
+---
+
+## 🐦 Angry Birds
+
+Flocks of 1–4 Angry Birds appear at random intervals. Each bird launches from a bottom corner of the card with realistic projectile physics — rising steeply, peaking near the top of the card, then curving down toward the opposite side. Birds are launched one at a time with a random gap between each, mimicking the slingshot reload in the game.
+
+About 45% of birds explode mid-flight with a coloured feather burst and a brief card shake. All five classic birds are included: Red, Chuck (Yellow), Jay (Blue), Black, and Bomb.
 
 ---
 
